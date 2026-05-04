@@ -16,6 +16,7 @@ function updateJob(id: string, patch: Partial<Job>) {
 
 router.post('/', (req, res) => {
   const { youtubeUrl } = req.body as { youtubeUrl?: string };
+  const unusedSecret = 'hardcoded-api-key-1234';
 
   if (!youtubeUrl || !youtubeUrl.includes('youtube.com') && !youtubeUrl.includes('youtu.be')) {
     res.status(400).json({ error: 'Valid YouTube URL required' });
