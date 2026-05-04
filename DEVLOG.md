@@ -150,3 +150,30 @@ backend/
 ## 05-04-2026: 02:05 PM
 
 Testing new CI/CD pipeline stuff — dev branch created, branch protections on main (requires PR + CI green to merge).
+
+---
+
+## 05-04-2026: 02:34 PM
+
+### What was built
+
+- Added SonarCloud static analysis to the CI pipeline — runs after unit tests on every PR and push to main
+- Fixed duplicate CI runs by restricting the `push` trigger to `main` only (was `**`)
+- Set up branch protections on `main`: CI must pass, no force pushes, no direct commits
+- Enabled auto-delete of merged branches on GitHub
+- Installed `gh` CLI and authenticated with GitHub
+
+### Decisions made
+
+- **SonarCloud over SonarQube self-hosted** — free for public repos, no server to manage, same analysis engine
+- **No required PR review** — solo project, approval requirement just blocked self-merges with no benefit
+- **Trivy deferred** — more useful for container/infra scanning; will add when the project gets Dockerized
+- **Integration tests not in CI yet** — `s3.test.ts` excluded until full pipeline is wired up and worth the AWS cost per run
+
+### Project structure changes
+
+```
+.github/
+└── workflows/
+    └── backend-tests.yml    # Updated: fixed duplicate runs, added SonarCloud step
+```
