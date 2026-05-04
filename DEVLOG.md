@@ -99,3 +99,26 @@ backend/
 ├── package.json
 └── tsconfig.json
 ```
+
+---
+
+## 05-04-2026: 01:54 PM
+
+### What was built
+
+- Updated `/commit` Claude command to grab the current Eastern time via bash (`TZ="America/New_York" date`) and stamp DEVLOG entries in 12-hour format with AM/PM
+- Added `/pr` Claude command — creates a GitHub pull request against `main` with `jmeegan2` added as a reviewer automatically
+
+### Decisions made
+
+- **System time via bash** — rather than relying on Claude's internal clock, the commit command now shells out to get the real system time, ensuring accurate timestamps regardless of context
+- **12-hour ET format** — all DEVLOG timestamps are now `MM-DD-YYYY: HH:MM AM/PM` in Eastern time for consistency
+
+### Project structure changes
+
+```
+.claude/
+└── commands/
+    ├── commit.md     # Updated: 12-hour ET timestamp via bash
+    └── pr.md         # New: /pr command for GitHub PRs with reviewer
+```
