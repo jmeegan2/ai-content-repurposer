@@ -144,3 +144,9 @@ backend/
 │   └── pr.md
 └── settings.json     # New: Claude Code permission allowlist
 ```
+
+---
+
+## 05-04-2026: 02:05 PM
+
+Testing new CI/CD pipeline stuff — dev branch created, branch protections on main (requires PR + CI green to merge).
