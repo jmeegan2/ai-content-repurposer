@@ -6,6 +6,66 @@ The tool downloads the video, transcribes it, asks an LLM to find the most engag
 
 ---
 
+## Architecture
+
+```mermaid
+flowchart TD
+    User(["👤 User"])
+
+    subgraph Frontend ["Frontend (React + Vite) — planned"]
+        UI["Dashboard\nUpload · Job Status · Clip Gallery"]
+    end
+
+    subgraph Backend ["Backend (Node.js + Express + TypeScript)"]
+        API["REST API\nPOST /jobs\nGET /jobs/:id"]
+        JobStore["In-Memory Job Store\n(Map → Supabase later)"]
+        Downloader["yt-dlp\nDownload MP4"]
+        Whisper["OpenAI Whisper API\nTimestamped Transcript"]
+        LLM["LLM — Claude / GPT\nClip Detection"]
+        FFmpeg["ffmpeg\n9:16 Crop · Cut · Caption Burn"]
+    end
+
+    subgraph Storage ["AWS S3 (ai-repurposer-clips · us-east-2)"]
+        RawBucket["raw/{jobId}/\nOriginal MP4"]
+        ClipsBucket["clips/{jobId}/\nFinal Vertical Clips"]
+    end
+
+    subgraph Auth ["Supabase — planned"]
+        DB["Postgres\nUsers · Job History"]
+        SupaAuth["Auth\nEmail / OAuth"]
+    end
+
+    subgraph Payments ["Stripe — planned"]
+        Checkout["Checkout · Subscriptions\nFree Trial Enforcement"]
+    end
+
+    User -->|"Paste YouTube URL"| UI
+    UI -->|"POST /jobs"| API
+    API --> JobStore
+    API --> Downloader
+    Downloader -->|"raw MP4"| RawBucket
+    RawBucket --> Whisper
+    Whisper -->|"transcript + timestamps"| LLM
+    LLM -->|"clip timestamps"| FFmpeg
+    FFmpeg -->|"vertical MP4s"| ClipsBucket
+    ClipsBucket -->|"presigned URLs"| UI
+    UI --> User
+
+    SupaAuth --> UI
+    DB --> API
+    Checkout --> UI
+
+    classDef built fill:#1a1a2e,stroke:#4f8ef7,color:#fff
+    classDef planned fill:#1a1a2e,stroke:#555,color:#888,stroke-dasharray:5 5
+    classDef storage fill:#0f3460,stroke:#4f8ef7,color:#fff
+
+    class API,JobStore,Downloader,Whisper,LLM,FFmpeg built
+    class UI,SupaAuth,DB,Checkout planned
+    class RawBucket,ClipsBucket storage
+```
+
+---
+
 ## How It Works
 
 1. **Paste a YouTube URL** — the backend pulls the video via yt-dlp.
