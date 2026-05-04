@@ -122,3 +122,25 @@ backend/
     ├── commit.md     # Updated: 12-hour ET timestamp via bash
     └── pr.md         # New: /pr command for GitHub PRs with reviewer
 ```
+
+---
+
+## 05-04-2026: 01:58 PM
+
+### What was built
+
+- Added `.claude/settings.json` with a permission allowlist for Claude Code bash commands — pre-approves `git`, `gh`, and `TZ=* date` commands so Claude doesn't prompt on every commit or PR operation
+
+### Decisions made
+
+- **Commit settings.json to the repo** — the file contains only permission allowlists (no secrets), so it's safe to check in and ensures these permissions persist across sessions
+
+### Project structure changes
+
+```
+.claude/
+├── commands/
+│   ├── commit.md
+│   └── pr.md
+└── settings.json     # New: Claude Code permission allowlist
+```
