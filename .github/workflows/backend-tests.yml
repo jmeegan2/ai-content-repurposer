@@ -33,3 +33,15 @@ jobs:
 
       - name: Run unit tests
         run: npm run test:ci
+
+      - name: SonarCloud scan
+        uses: SonarSource/sonarcloud-github-action@ba3875ecf642b2129de2b589510c81a8b53dbf4e
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=jmeegan2_ai-content-repurposer
+            -Dsonar.organization=jmeegan2
+            -Dsonar.sources=backend/src
+            -Dsonar.exclusions=**/*.test.ts
