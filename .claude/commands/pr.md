@@ -16,7 +16,7 @@ Run these in parallel:
 Run `/update-devlog` — it handles the timestamp, entry format, and commit.
 
 ### 3. Run an AI review
-Run `/review` on the branch changes. Capture the full output — it will be embedded in the PR body.
+Run `/review` on the branch changes. Use only the **key findings** section or a short bullet summary — do not paste a full breakdown. Embed the condensed output in the PR body.
 
 ### 4. Push the branch
 ```bash

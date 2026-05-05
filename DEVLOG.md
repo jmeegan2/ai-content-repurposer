@@ -233,3 +233,15 @@ backend/src/services/
 ├── pr.md               # Updated: delegates DEVLOG step to /update-devlog
 └── commit.md           # Updated: cleaner step-by-step workflow
 ```
+
+---
+
+## 05-05-2026: 06:30 PM
+
+### What was built
+
+- **AI review step in `/pr` command** — `/pr` now runs `/review` on the branch diff before creating the PR and embeds a condensed summary under an `## AI Review` section in the PR body
+
+### Decisions made
+
+- **Review before push** — running the AI review before `git push` means the findings are in the PR body on creation, not added as a follow-up comment
