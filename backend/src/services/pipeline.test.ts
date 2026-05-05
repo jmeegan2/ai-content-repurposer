@@ -30,7 +30,7 @@ beforeEach(() => {
     filePath: '/tmp/repurposer-abc/video.mp4',
     tempDir: '/tmp/repurposer-abc',
   });
-  vi.mocked(uploadFile).mockResolvedValue(undefined);
+  vi.mocked(uploadFile).mockResolvedValue('raw/job-1/video.mp4');
   vi.mocked(transcribeVideo).mockResolvedValue(mockTranscript);
 });
 
