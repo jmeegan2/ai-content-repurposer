@@ -9,7 +9,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 function extractAudio(videoPath: string, audioPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const proc = spawn("ffmpeg", [
+    const proc = spawn(process.env.FFMPEG_PATH ?? "/opt/homebrew/bin/ffmpeg", [
       "-i", videoPath,
       "-vn",
       "-ar", "16000",
