@@ -245,3 +245,30 @@ backend/src/services/
 ### Decisions made
 
 - **Review before push** — running the AI review before `git push` means the findings are in the PR body on creation, not added as a follow-up comment
+
+---
+
+## 05-05-2026: 06:55 PM
+
+### What was built
+
+- **Coverage reporting wired into CI** — SonarCloud now receives actual test coverage data instead of running blind
+- `vitest.config.ts` — configures v8 coverage provider to output LCOV format to `./coverage/lcov.info`; excludes test files from coverage scope
+- `test:coverage` npm script — runs unit tests (excluding S3 and integration tests) with `--coverage` flag
+- CI workflow updated to run `test:coverage` instead of `test:ci`; added `fetch-depth: 0` so SonarCloud can do accurate git blame/new-code analysis
+- `sonar-project.properties` — extracted SonarCloud config out of inline workflow args; added `sonar.javascript.lcov.reportPaths` pointing at the generated LCOV file
+- `/backend/coverage` added to `.gitignore`
+- Reordered `/commit` command: PR check now happens before writing the commit message
+
+### Decisions made
+
+- **LCOV over other formats** — SonarCloud's native JS coverage import expects LCOV; v8 provider generates it directly with no extra tooling
+- **`sonar-project.properties` over inline args** — keeps the workflow YAML clean and is the standard SonarCloud pattern; easier to update without touching CI config
+
+### Project structure changes
+
+```
+backend/
+└── vitest.config.ts          # New: vitest coverage config (v8, lcov output)
+sonar-project.properties      # New: SonarCloud project config (extracted from CI)
+```
