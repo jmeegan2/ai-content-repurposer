@@ -272,3 +272,29 @@ backend/
 └── vitest.config.ts          # New: vitest coverage config (v8, lcov output)
 sonar-project.properties      # New: SonarCloud project config (extracted from CI)
 ```
+
+---
+
+## 05-05-2026: 07:26 PM
+
+### What was built
+
+- **Unit tests for `pipeline.ts`** — 8 tests covering happy path, all status transitions, S3 key format, error handling (Error and non-Error throws), temp dir cleanup on success and failure, and skipped cleanup when download never starts
+- **Transcriber test gaps closed** — refactored `transcriber.test.ts` to use `vi.hoisted` so `mockCreate` is accessible per-test; added cases for ffmpeg non-zero exit, ffmpeg spawn error, and Whisper response with missing words array
+- **Fixed async promise executor bug in `downloader.ts`** — `new Promise(async ...)` was replaced by making the function `async` and awaiting `mkdtemp` before the Promise constructor; prevents errors from escaping as unhandled rejections
+- **All SonarCloud issues resolved** — added `node:` import prefixes across `downloader.ts`, `transcriber.ts`, `pipeline.ts`, `s3.ts`; flipped negated condition in transcriber close handler; disabled `X-Powered-By` header in Express; switched to absolute `YTDLP_PATH` env var with `/opt/homebrew/bin/yt-dlp` fallback
+- **Renamed `s3.test.ts` → `s3.integration.test.ts`** — consistent naming convention; CI exclude pattern simplified to a single `**/*.integration.test.ts` glob
+- **Upgraded `sonarqube-scan-action` v5 → v6** — v5 was flagged as containing a security vulnerability
+
+### Decisions made
+
+- **`vi.hoisted` for shared mock state** — Vitest hoists `vi.mock` calls but not regular variables; `vi.hoisted` is the correct way to share a mock function reference between the factory and the test body
+- **Absolute path pattern for all spawned binaries** — `YTDLP_PATH` env var with Homebrew fallback, matching the existing `FFMPEG_PATH` pattern; keeps SonarCloud happy and makes the binary path overridable in CI/prod
+
+### Project structure changes
+
+```
+backend/src/services/
+├── pipeline.test.ts              # New: full unit test suite for pipeline orchestration
+└── s3.integration.test.ts        # Renamed from s3.test.ts
+```
