@@ -15,13 +15,16 @@ Run these in parallel:
 ### 2. Update DEVLOG.md
 Run `/update-devlog` — it handles the timestamp, entry format, and commit.
 
-### 3. Push the branch
+### 3. Run an AI review
+Run `/review` on the branch changes. Capture the full output — it will be embedded in the PR body.
+
+### 4. Push the branch
 ```bash
 git push -u origin HEAD
 ```
 
-### 4. Create the PR
-Use this exact format:
+### 5. Create the PR
+Use this exact format, inserting the `/review` output under `## AI Review`:
 ```bash
 gh pr create --base main --reviewer jmeegan2 --title "..." --body "$(cat <<'EOF'
 ## Summary
@@ -29,6 +32,9 @@ gh pr create --base main --reviewer jmeegan2 --title "..." --body "$(cat <<'EOF'
 
 ## Test plan
 - ...
+
+## AI Review
+<insert /review output here>
 
 🤖 Generated with Claude Code
 EOF
@@ -38,4 +44,4 @@ EOF
 - Summary: what was built and why
 - Test plan: bulleted checklist of what to verify
 
-### 5. Return the PR URL
+### 6. Return the PR URL
