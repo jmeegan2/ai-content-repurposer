@@ -8,7 +8,6 @@ export interface DownloadResult {
   tempDir: string;
 }
 
-const SAFE_PATH = '/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin';
 
 export function downloadYouTubeVideo(
   youtubeUrl: string,
@@ -28,7 +27,7 @@ export function downloadYouTubeVideo(
       youtubeUrl,
     ];
 
-    const proc = spawn("yt-dlp", args, { env: { PATH: SAFE_PATH } });
+    const proc = spawn("yt-dlp", args);
 
     let filePath = "";
     let stderr = "";
