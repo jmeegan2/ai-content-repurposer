@@ -1,7 +1,7 @@
-import { spawn } from "child_process";
-import { mkdtemp } from "fs/promises";
-import { tmpdir } from "os";
-import { join } from "path";
+import { spawn } from "node:child_process";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 export interface DownloadResult {
   filePath: string;
@@ -9,24 +9,24 @@ export interface DownloadResult {
 }
 
 
-export function downloadYouTubeVideo(
+export async function downloadYouTubeVideo(
   youtubeUrl: string,
 ): Promise<DownloadResult> {
-  return new Promise(async (resolve, reject) => {
-    const tempDir = await mkdtemp(join(tmpdir(), "repurposer-"));
-    const outputTemplate = join(tempDir, "%(id)s.%(ext)s");
+  const tempDir = await mkdtemp(join(tmpdir(), "repurposer-"));
+  const outputTemplate = join(tempDir, "%(id)s.%(ext)s");
 
-    const args = [
-      "--format",
-      "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-      "--output",
-      outputTemplate,
-      "--print",
-      "after_move:filepath",
-      "--no-playlist",
-      youtubeUrl,
-    ];
+  const args = [
+    "--format",
+    "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+    "--output",
+    outputTemplate,
+    "--print",
+    "after_move:filepath",
+    "--no-playlist",
+    youtubeUrl,
+  ];
 
+  return new Promise((resolve, reject) => {
     const proc = spawn("yt-dlp", args);
 
     let filePath = "";

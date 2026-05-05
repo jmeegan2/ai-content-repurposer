@@ -1,4 +1,4 @@
-import { rm } from 'fs/promises';
+import { rm } from 'node:fs/promises';
 import type { Job } from '../types/index.js';
 import { downloadYouTubeVideo } from './downloader.js';
 import { uploadFile } from './s3.js';
