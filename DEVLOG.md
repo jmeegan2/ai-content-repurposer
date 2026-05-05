@@ -153,6 +153,37 @@ Testing new CI/CD pipeline stuff — dev branch created, branch protections on m
 
 ---
 
+## 05-05-2026: 06:03 PM
+
+### What was built
+
+- **Whisper transcription step** — Step 2 of the pipeline is complete and live-tested
+- `transcriber.ts` — ffmpeg extracts audio-only MP3 at 16kHz mono from the downloaded MP4 (keeps file well under Whisper's 25MB limit), sends to OpenAI Whisper API with word-level timestamp granularity, cleans up audio file after
+- `types/index.ts` — added `WordTimestamp`, `Transcript` interfaces and `transcript?` field on `Job`
+- `pipeline.ts` — wired transcription between S3 upload and done: `downloading → transcribing → done`
+- `transcriber.test.ts` — unit tests with mocked OpenAI client and ffmpeg
+- `transcriber.integration.test.ts` — hits real yt-dlp + Whisper API; validated against "Me at the zoo" (19s, first YouTube video ever); passed in 7.1s
+- `package.json` — updated `test:ci` to exclude all `*.integration.test.ts` files so real API tests never run in GitHub Actions
+- `CLAUDE.md` — moved build order pointer from Step 1 ✓ to Step 2 ← current
+
+### Decisions made
+
+- **Audio extraction before cleanup** — temp MP4 stays alive long enough for ffmpeg to pull audio, then everything is deleted together
+- **16kHz mono MP3** — Whisper only needs audio quality, not video. 16kHz mono at 64k bitrate keeps files tiny and fast
+- **`*.integration.test.ts` naming convention** — cleaner than excluding files by name one-by-one in CI
+- **Word timestamps are essential** — used in Step 3 to map LLM clip suggestions back to exact video timestamps
+
+### Project structure changes
+
+```
+backend/src/services/
+├── transcriber.ts                   # New: ffmpeg audio extract + Whisper API
+├── transcriber.test.ts              # New: unit tests (mocked)
+└── transcriber.integration.test.ts  # New: real API test (excluded from CI)
+```
+
+---
+
 ## 05-04-2026: 02:34 PM
 
 ### What was built

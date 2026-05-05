@@ -2,6 +2,7 @@ import { rm } from 'fs/promises';
 import type { Job } from '../types/index.js';
 import { downloadYouTubeVideo } from './downloader.js';
 import { uploadFile } from './s3.js';
+import { transcribeVideo } from './transcriber.js';
 
 type UpdateJobFn = (id: string, patch: Partial<Job>) => void;
 
@@ -14,9 +15,11 @@ export async function runPipeline(jobId: string, youtubeUrl: string, updateJob: 
 
     const fileName = filePath.split('/').pop()!;
     const s3Key = `raw/${jobId}/${fileName}`;
-
-    updateJob(jobId, { status: 'processing' });
     await uploadFile(s3Key, filePath);
+
+    updateJob(jobId, { status: 'transcribing' });
+    const transcript = await transcribeVideo(filePath);
+    updateJob(jobId, { transcript });
 
     updateJob(jobId, { status: 'done' });
   } catch (err) {

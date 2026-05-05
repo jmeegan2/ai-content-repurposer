@@ -1,5 +1,16 @@
 export type JobStatus = 'queued' | 'downloading' | 'transcribing' | 'detecting' | 'processing' | 'done' | 'failed';
 
+export interface WordTimestamp {
+  word: string;
+  start: number;
+  end: number;
+}
+
+export interface Transcript {
+  text: string;
+  words: WordTimestamp[];
+}
+
 export interface Clip {
   id: string;
   startTime: number;
@@ -16,5 +27,6 @@ export interface Job {
   createdAt: string;
   updatedAt: string;
   clips: Clip[];
+  transcript?: Transcript;
   error?: string;
 }
