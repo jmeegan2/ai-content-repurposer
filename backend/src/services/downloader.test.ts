@@ -74,7 +74,7 @@ describe('downloadYouTubeVideo', () => {
     await downloadYouTubeVideo('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
 
     const [cmd, args] = vi.mocked(spawn).mock.calls[0];
-    expect(cmd).toBe('yt-dlp');
+    expect(cmd).toBe('/opt/homebrew/bin/yt-dlp');
     expect(args).toContain('--no-playlist');
     expect(args).toContain('--output');
     expect(args).toContain('https://www.youtube.com/watch?v=dQw4w9WgXcQ');

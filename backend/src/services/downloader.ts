@@ -27,7 +27,7 @@ export async function downloadYouTubeVideo(
   ];
 
   return new Promise((resolve, reject) => {
-    const proc = spawn("yt-dlp", args);
+    const proc = spawn(process.env.YTDLP_PATH ?? "/opt/homebrew/bin/yt-dlp", args);
 
     let filePath = "";
     let stderr = "";
