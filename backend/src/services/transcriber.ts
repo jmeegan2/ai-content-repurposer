@@ -1,6 +1,6 @@
-import { spawn } from "child_process";
-import { createReadStream } from "fs";
-import { unlink } from "fs/promises";
+import { spawn } from "node:child_process";
+import { createReadStream } from "node:fs";
+import { unlink } from "node:fs/promises";
 import OpenAI from "openai";
 import type { Transcript, WordTimestamp } from "../types/index.js";
 
@@ -25,9 +25,8 @@ function extractAudio(videoPath: string, audioPath: string): Promise<void> {
     });
 
     proc.on("close", (code) => {
-      if (code !== 0)
-        reject(new Error(`ffmpeg exited with code ${code}: ${stderr}`));
-      else resolve();
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg exited with code ${code}: ${stderr}`));
     });
 
     proc.on("error", (err) =>
