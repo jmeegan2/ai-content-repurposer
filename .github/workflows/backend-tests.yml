@@ -17,6 +17,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -31,17 +33,11 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
-      - name: Run unit tests
-        run: npm run test:ci
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
 
       - name: SonarCloud scan
-        uses: SonarSource/sonarcloud-github-action@ba3875ecf642b2129de2b589510c81a8b53dbf4e
+        uses: SonarSource/sonarqube-scan-action@v5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.projectKey=jmeegan2_ai-content-repurposer
-            -Dsonar.organization=jmeegan2
-            -Dsonar.sources=backend/src
-            -Dsonar.exclusions=**/*.test.ts

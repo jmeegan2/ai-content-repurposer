@@ -1,2 +1,4 @@
 .env
 /backend/node_modules
+/backend/coverage
+.claude/settings.local.json

@@ -4,6 +4,7 @@ import cors from 'cors';
 import jobsRouter from './routes/jobs.js';
 
 const app = express();
+app.disable('x-powered-by');
 const PORT = process.env.PORT ?? 3001;
 
 app.use(cors({ origin: process.env.FRONTEND_URL ?? 'http://localhost:5173' }));
