@@ -6,6 +6,8 @@ import type { Transcript, WordTimestamp } from '../types/index.js';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+const SAFE_PATH = '/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin';
+
 function extractAudio(videoPath: string, audioPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn('ffmpeg', [
@@ -16,7 +18,7 @@ function extractAudio(videoPath: string, audioPath: string): Promise<void> {
       '-b:a', '64k',
       '-y',
       audioPath,
-    ]);
+    ], { env: { PATH: SAFE_PATH } });
 
     let stderr = '';
     proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
