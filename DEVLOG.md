@@ -153,6 +153,33 @@ Testing new CI/CD pipeline stuff — dev branch created, branch protections on m
 
 ---
 
+## 05-04-2026: 02:34 PM
+
+### What was built
+
+- Added SonarCloud static analysis to the CI pipeline — runs after unit tests on every PR and push to main
+- Fixed duplicate CI runs by restricting the `push` trigger to `main` only (was `**`)
+- Set up branch protections on `main`: CI must pass, no force pushes, no direct commits
+- Enabled auto-delete of merged branches on GitHub
+- Installed `gh` CLI and authenticated with GitHub
+
+### Decisions made
+
+- **SonarCloud over SonarQube self-hosted** — free for public repos, no server to manage, same analysis engine
+- **No required PR review** — solo project, approval requirement just blocked self-merges with no benefit
+- **Trivy deferred** — more useful for container/infra scanning; will add when the project gets Dockerized
+- **Integration tests not in CI yet** — `s3.test.ts` excluded until full pipeline is wired up and worth the AWS cost per run
+
+### Project structure changes
+
+```
+.github/
+└── workflows/
+    └── backend-tests.yml    # Updated: fixed duplicate runs, added SonarCloud step
+```
+
+---
+
 ## 05-05-2026: 06:03 PM
 
 ### What was built
@@ -184,27 +211,25 @@ backend/src/services/
 
 ---
 
-## 05-04-2026: 02:34 PM
+## 05-05-2026: 06:22 PM
 
 ### What was built
 
-- Added SonarCloud static analysis to the CI pipeline — runs after unit tests on every PR and push to main
-- Fixed duplicate CI runs by restricting the `push` trigger to `main` only (was `**`)
-- Set up branch protections on `main`: CI must pass, no force pushes, no direct commits
-- Enabled auto-delete of merged branches on GitHub
-- Installed `gh` CLI and authenticated with GitHub
+- **Fixed DEVLOG entry ordering** — Whisper entry (05-05-2026) was inserted above the SonarCloud entry (05-04-2026); corrected to chronological order with newest at the bottom
+- **`/update-devlog` command** — new dedicated command for appending DEVLOG entries; enforces always appending to the bottom so ordering stays chronological
+- **Updated `/pr` command** — removed inline DEVLOG logic, now delegates to `/update-devlog`
+- **PATH restriction in spawn calls** — fixed `PATH` passed to `ffmpeg` and `yt-dlp` `spawn` calls to prevent user-writable directory shadowing; resolves SonarCloud security hotspot
 
 ### Decisions made
 
-- **SonarCloud over SonarQube self-hosted** — free for public repos, no server to manage, same analysis engine
-- **No required PR review** — solo project, approval requirement just blocked self-merges with no benefit
-- **Trivy deferred** — more useful for container/infra scanning; will add when the project gets Dockerized
-- **Integration tests not in CI yet** — `s3.test.ts` excluded until full pipeline is wired up and worth the AWS cost per run
+- **Separate `/update-devlog` command** — keeps `/pr` and `/commit` focused on their jobs; DEVLOG update logic lives in one place
+- **Append-only rule in `/update-devlog`** — explicit instruction to always write at the bottom prevents the ordering bug from recurring
 
 ### Project structure changes
 
 ```
-.github/
-└── workflows/
-    └── backend-tests.yml    # Updated: fixed duplicate runs, added SonarCloud step
+.claude/commands/
+├── update-devlog.md    # New: dedicated DEVLOG update command
+├── pr.md               # Updated: delegates DEVLOG step to /update-devlog
+└── commit.md           # Updated: cleaner step-by-step workflow
 ```
