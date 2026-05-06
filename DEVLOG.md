@@ -327,4 +327,3 @@ backend/src/services/
 backend/src/services/
 └── pipeline.integration.test.ts          # New: end-to-end pipeline smoke test
 ```
-```
