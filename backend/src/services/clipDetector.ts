@@ -94,7 +94,7 @@ Use the timestamps in the transcript to set precise startTime and endTime values
   });
 
   const toolCall = response.choices[0]?.message?.tool_calls?.[0];
-  if (!toolCall || toolCall.type !== "function") {
+  if (toolCall?.type !== "function") {
     throw new Error("Model did not return clip detections");
   }
 
