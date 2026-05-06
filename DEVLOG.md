@@ -297,4 +297,33 @@ sonar-project.properties      # New: SonarCloud project config (extracted from C
 backend/src/services/
 ├── pipeline.test.ts              # New: full unit test suite for pipeline orchestration
 └── s3.integration.test.ts        # Renamed from s3.test.ts
+
+---
+
+## 05-06-2026: 06:50 PM
+
+### What was built
+
+- **`clipDetector.ts`** — Step 3 of the pipeline: sends a timestamped transcript to `gpt-5.4-mini` via tool use and returns 3–5 detected viral clips with title, startTime, and endTime
+- **Transcript formatted as chunked timestamped lines** — `formatTimestampedTranscript` groups words into ~10-word chunks with a leading `[Xs]` marker so the model can pinpoint precise cut points without processing the full flat word list
+- **`detectClips` wired into `pipeline.ts`** — pipeline now has a `detecting` status stage; detected clips are mapped to full `Clip` objects with UUIDs and empty `s3Key` placeholders ready for the ffmpeg step
+- **Unit tests for `clipDetector.ts`** — 8 tests: happy path tool call, empty transcript, missing `tool_calls` on response, non-function tool call type, JSON parse of arguments, `formatTimestampedTranscript` chunking, multi-chunk output, and empty words array
+- **Integration tests for `clipDetector.ts`** — 421-line suite covering live API call shape, model response validation, clip duration constraints (30–90s), boundary alignment, and error cases
+- **Integration test for `pipeline.ts`** — end-to-end smoke test that stubs each service layer and verifies the full status sequence: `downloading → transcribing → detecting → done`
+
+### Decisions made
+
+- **Tool use over JSON mode** — `tool_choice: { type: "function", function: { name: "report_clips" } }` forces a structured response; more reliable than prompting for JSON and parsing free-form output
+- **`additionalProperties: false` on tool schema** — strict schema prevents the model from adding unexpected fields that would break downstream parsing
+- **`s3Key: ''` placeholder on detected clips** — clips are created with an empty key at detection time; the ffmpeg step (Step 4) will populate it after cutting and uploading
+
+### Project structure changes
+
+```
+backend/src/services/
+├── clipDetector.ts                       # New: LLM clip detection (Step 3)
+├── clipDetector.test.ts                  # New: unit tests for clipDetector
+└── clipDetector.integration.test.ts      # New: integration tests for clipDetector
+backend/src/services/
+└── pipeline.integration.test.ts          # New: end-to-end pipeline smoke test
 ```

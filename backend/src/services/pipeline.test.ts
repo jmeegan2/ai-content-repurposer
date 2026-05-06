@@ -12,6 +12,10 @@ vi.mock('./transcriber.js', () => ({
   transcribeVideo: vi.fn(),
 }));
 
+vi.mock('./clipDetector.js', () => ({
+  detectClips: vi.fn(),
+}));
+
 vi.mock('fs/promises', () => ({
   rm: vi.fn().mockResolvedValue(undefined),
 }));
@@ -19,6 +23,7 @@ vi.mock('fs/promises', () => ({
 import { downloadYouTubeVideo } from './downloader.js';
 import { uploadFile } from './s3.js';
 import { transcribeVideo } from './transcriber.js';
+import { detectClips } from './clipDetector.js';
 import { rm } from 'fs/promises';
 import { runPipeline } from './pipeline.js';
 
@@ -32,6 +37,9 @@ beforeEach(() => {
   });
   vi.mocked(uploadFile).mockResolvedValue('raw/job-1/video.mp4');
   vi.mocked(transcribeVideo).mockResolvedValue(mockTranscript);
+  vi.mocked(detectClips).mockResolvedValue([
+    { title: 'Great Clip', startTime: 0, endTime: 60 },
+  ]);
 });
 
 describe('runPipeline', () => {
@@ -40,7 +48,7 @@ describe('runPipeline', () => {
     await runPipeline('job-1', 'https://youtube.com/watch?v=abc', updateJob);
 
     const statuses = updateJob.mock.calls.map((c) => c[1].status).filter(Boolean);
-    expect(statuses).toEqual(['downloading', 'transcribing', 'done']);
+    expect(statuses).toEqual(['downloading', 'transcribing', 'detecting', 'done']);
   });
 
   it('sets transcript on the job after transcription', async () => {
