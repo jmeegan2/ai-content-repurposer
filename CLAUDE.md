@@ -12,7 +12,7 @@ Paste a YouTube URL, get back 9:16 vertical clips with burned-in captions ready 
 | Dev runner       | tsx watch                                               |
 | Video download   | yt-dlp (Homebrew)                                       |
 | Transcription    | OpenAI Whisper API                                      |
-| Clip detection   | LLM (Claude or GPT)                                     |
+| Clip detection   | OpenAI gpt-5.4-mini                                     |
 | Video processing | ffmpeg (Homebrew)                                       |
 | File storage     | AWS S3 (bucket: ai-repurposer-clips, region: us-east-2) |
 | Database         | Supabase Postgres (planned)                             |
@@ -58,8 +58,8 @@ npm run dev      # tsx watch — hot reloads on save
 ## Build order
 
 1. yt-dlp download step ✓
-2. Whisper transcription ← current
-3. LLM clip detection
+2. Whisper transcription ✓
+3. LLM clip detection ← current
 4. ffmpeg cut + 9:16 crop + caption burn
 5. S3 upload of clips
 6. React + Vite frontend
