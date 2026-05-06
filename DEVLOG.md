@@ -327,3 +327,25 @@ backend/src/services/
 backend/src/services/
 └── pipeline.integration.test.ts          # New: end-to-end pipeline smoke test
 ```
+
+---
+
+## 05-06-2026: 07:18 PM
+
+### What was built
+
+- **Non-blocking `npm audit` in CI** — added audit step to `backend-tests.yml` that logs vulnerability output without failing the pipeline
+- **Dependabot configured** — weekly npm dependency checks for `backend/`, auto-opens PRs when updates (including security patches) are available
+
+### Decisions made
+
+- **Non-blocking audit (`|| true`)** — Dependabot is the remediation path; blocking CI on a CVE you can't fix until upstream patches would halt unrelated work
+- **Weekly Dependabot interval** — daily is too noisy, monthly is too slow for security patches; weekly is the standard
+- **Dependabot + non-blocking audit together** — Dependabot proactively fixes CVEs, audit in CI provides a second set of eyes in the logs
+
+### Project structure changes
+
+```
+.github/
+└── dependabot.yml   # New: weekly npm dependency update checks
+```

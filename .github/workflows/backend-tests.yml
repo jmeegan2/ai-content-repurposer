@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit dependencies
+        run: npm audit || true  # non-blocking: logs vulnerabilities without failing CI
+
       - name: Type check
         run: npx tsc --noEmit
 
