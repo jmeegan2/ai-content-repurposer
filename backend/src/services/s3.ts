@@ -30,10 +30,14 @@ export async function uploadFile(key: string, filePath: string, contentType = 'v
   return key;
 }
 
-export async function getPresignedUrl(key: string, expiresInSeconds = 3600) {
+export async function getPresignedUrl(key: string, expiresInSeconds = 3600, filename?: string) {
   return getSignedUrl(
     s3,
-    new GetObjectCommand({ Bucket: BUCKET, Key: key }),
+    new GetObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      ResponseContentDisposition: filename ? `attachment; filename="${filename}"` : undefined,
+    }),
     { expiresIn: expiresInSeconds }
   );
 }

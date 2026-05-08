@@ -45,7 +45,7 @@ beforeEach(() => {
   vi.mocked(detectClips).mockResolvedValue([
     { title: 'Great Clip', startTime: 0, endTime: 60 },
   ]);
-  vi.mocked(processClip).mockResolvedValue('/tmp/repurposer-abc/clip-1.mp4');
+  vi.mocked(processClip).mockResolvedValue({ clipPath: '/tmp/repurposer-abc/clip-1.mp4', thumbnailPath: '/tmp/repurposer-abc/clip-1.jpg' });
 });
 
 describe('runPipeline', () => {

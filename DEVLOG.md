@@ -377,3 +377,40 @@ backend/src/services/
 ├── clipper.ts          # New: ffmpeg cut + 9:16 crop + caption burn (Step 4)
 └── clipper.test.ts     # New: unit tests for processClip
 ```
+
+---
+
+## 05-08-2026: 05:14 PM
+
+### What was built
+
+- **React + Vite + Tailwind frontend** — single work page with URL input form, live pipeline step indicator (Download → Transcribe → Detect → Process → Done), and a responsive clip gallery showing thumbnails and download buttons
+- **Thumbnail extraction** — after each clip is processed, ffmpeg grabs a JPEG frame from the clip midpoint and uploads it to S3 alongside the MP4; shown in the clip gallery
+- **fluent-ffmpeg refactor** — replaced raw `child_process.spawn` in `clipper.ts` with fluent-ffmpeg for a more readable chainable API
+- **Presigned URL download fix** — baked `Content-Disposition: attachment` into clip presigned URLs so downloads trigger immediately instead of opening in the browser; sanitized clip title filenames to ASCII to avoid S3 ISO-8859-1 header errors
+- **Removed multer** — unused file upload dependency removed from backend
+
+### Decisions made
+
+- **React + Vite over Next.js** — the tool is a single authenticated work page with heavy client-side state (2s polling); SSR adds no value here; Next.js deferred until the product is validated and a full rebuild makes sense
+- **Polling every 2s** — stops automatically when job reaches `done` or `failed`; simple and sufficient for MVP without WebSockets overhead
+- **`Content-Disposition` in presigned URL** — the HTML `download` attribute is ignored by browsers for cross-origin URLs; baking the header into the S3 presigned URL via `ResponseContentDisposition` is the correct fix
+- **fluent-ffmpeg despite deprecation** — unmaintained but stable; ffmpeg CLI hasn't changed in ways that break it; readable filter chains outweigh the maintenance risk for MVP
+
+### Project structure changes
+
+```
+frontend/
+├── index.html
+├── package.json
+├── tailwind.config.js
+├── vite.config.ts
+└── src/
+    ├── App.tsx               # Main app: job state, polling, layout
+    ├── api.ts                # createJob, getJob fetch wrappers
+    ├── types.ts              # Job, Clip, JobStatus types (mirrors backend)
+    └── components/
+        ├── UrlForm.tsx       # YouTube URL input + submit button
+        ├── PipelineStatus.tsx # Step indicator with live progress
+        └── ClipCard.tsx      # Thumbnail, title, duration, download button
+```
