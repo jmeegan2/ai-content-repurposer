@@ -297,6 +297,7 @@ sonar-project.properties      # New: SonarCloud project config (extracted from C
 backend/src/services/
 ├── pipeline.test.ts              # New: full unit test suite for pipeline orchestration
 └── s3.integration.test.ts        # Renamed from s3.test.ts
+```
 
 ---
 
