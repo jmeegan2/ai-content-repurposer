@@ -3,7 +3,6 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Clip, WordTimestamp } from "../types/index.js";
 
-//we are missing somekind of --libass that handles subtitles
 const FFMPEG = process.env.FFMPEG_PATH ?? "/opt/homebrew/bin/ffmpeg";
 const WORDS_PER_CAPTION = 4;
 
