@@ -8,7 +8,6 @@ export interface DownloadResult {
   tempDir: string;
 }
 
-
 export async function downloadYouTubeVideo(
   youtubeUrl: string,
 ): Promise<DownloadResult> {
@@ -27,7 +26,10 @@ export async function downloadYouTubeVideo(
   ];
 
   return new Promise((resolve, reject) => {
-    const proc = spawn(process.env.YTDLP_PATH ?? "/opt/homebrew/bin/yt-dlp", args);
+    const proc = spawn(
+      process.env.YTDLP_PATH ?? "/opt/homebrew/bin/yt-dlp",
+      args,
+    );
 
     let filePath = "";
     let stderr = "";

@@ -1,11 +1,11 @@
 export type JobStatus =
-  | 'queued'
-  | 'downloading'
-  | 'transcribing'
-  | 'detecting'
-  | 'processing'
-  | 'done'
-  | 'failed';
+  | "queued"
+  | "downloading"
+  | "transcribing"
+  | "detecting"
+  | "processing"
+  | "done"
+  | "failed";
 
 export interface Clip {
   id: string;
