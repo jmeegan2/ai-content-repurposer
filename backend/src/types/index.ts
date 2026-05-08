@@ -1,4 +1,11 @@
-export type JobStatus = 'queued' | 'downloading' | 'transcribing' | 'detecting' | 'processing' | 'done' | 'failed';
+export type JobStatus =
+  | "queued"
+  | "downloading"
+  | "transcribing"
+  | "detecting"
+  | "processing"
+  | "done"
+  | "failed";
 
 export interface WordTimestamp {
   word: string;

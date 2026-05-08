@@ -8,9 +8,8 @@ export interface DownloadResult {
   tempDir: string;
 }
 
-
 export async function downloadYouTubeVideo(
-  youtubeUrl: string,
+  youtubeUrl: string
 ): Promise<DownloadResult> {
   const tempDir = await mkdtemp(join(tmpdir(), "repurposer-"));
   const outputTemplate = join(tempDir, "%(id)s.%(ext)s");
@@ -23,11 +22,14 @@ export async function downloadYouTubeVideo(
     "--print",
     "after_move:filepath",
     "--no-playlist",
-    youtubeUrl,
+    youtubeUrl
   ];
 
   return new Promise((resolve, reject) => {
-    const proc = spawn(process.env.YTDLP_PATH ?? "/opt/homebrew/bin/yt-dlp", args);
+    const proc = spawn(
+      process.env.YTDLP_PATH ?? "/opt/homebrew/bin/yt-dlp",
+      args
+    );
 
     let filePath = "";
     let stderr = "";

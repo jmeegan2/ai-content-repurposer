@@ -1,0 +1,32 @@
+{
+  "name": "ai-content-repurposer",
+  "version": "1.0.0",
+  "description": "Paste a YouTube link, get back captioned vertical clips ready to post on TikTok, Reels, and Shorts.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "husky"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jmeegan2/ai-content-repurposer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/jmeegan2/ai-content-repurposer/issues"
+  },
+  "homepage": "https://github.com/jmeegan2/ai-content-repurposer#readme",
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.3",
+    "prettier": "^3.8.3"
+  },
+  "lint-staged": {
+    "**/*.{ts,tsx}": [
+      "prettier --write"
+    ]
+  }
+}

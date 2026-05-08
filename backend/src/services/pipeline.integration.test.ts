@@ -31,7 +31,7 @@ describe("pipeline integration", () => {
         "transcribing",
         "detecting",
         "processing",
-        "done",
+        "done"
       ]);
 
       // Transcript must be populated
@@ -43,7 +43,7 @@ describe("pipeline integration", () => {
       const clipsPatch = patches.find((p) => p.clips);
       console.log(
         "Detected clips:",
-        JSON.stringify(clipsPatch?.clips, null, 2),
+        JSON.stringify(clipsPatch?.clips, null, 2)
       );
       expect(Array.isArray(clipsPatch?.clips)).toBe(true);
       expect(clipsPatch!.clips!.length).toBeGreaterThan(0);
@@ -57,6 +57,6 @@ describe("pipeline integration", () => {
         expect(clip.s3Key).toMatch(/^clips\/.+\.mp4$/);
       }
     },
-    5 * 60 * 1000,
+    5 * 60 * 1000
   ); // 5 minute timeout — extended for ffmpeg processing
 });

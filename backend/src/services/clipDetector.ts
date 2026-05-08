@@ -26,7 +26,7 @@ function formatTimestampedTranscript(transcript: Transcript): string {
 }
 
 export async function detectClips(
-  transcript: Transcript,
+  transcript: Transcript
 ): Promise<DetectedClip[]> {
   const formattedTranscript = formatTimestampedTranscript(transcript);
 
@@ -44,12 +44,12 @@ Given a word-timestamped transcript, find the 3-5 best clips. Each clip must:
 - Have a strong hook in the first 3 seconds
 - Be engaging: funny, insightful, emotional, or surprising
 
-Use the timestamps in the transcript to set precise startTime and endTime values in seconds.`,
+Use the timestamps in the transcript to set precise startTime and endTime values in seconds.`
       },
       {
         role: "user",
-        content: `Find the best viral clips in this transcript:\n\n${formattedTranscript}`,
-      },
+        content: `Find the best viral clips in this transcript:\n\n${formattedTranscript}`
+      }
     ],
     tools: [
       {
@@ -68,29 +68,29 @@ Use the timestamps in the transcript to set precise startTime and endTime values
                   properties: {
                     title: {
                       type: "string",
-                      description: "Short, catchy title for the clip",
+                      description: "Short, catchy title for the clip"
                     },
                     startTime: {
                       type: "number",
-                      description: "Clip start time in seconds",
+                      description: "Clip start time in seconds"
                     },
                     endTime: {
                       type: "number",
-                      description: "Clip end time in seconds",
-                    },
+                      description: "Clip end time in seconds"
+                    }
                   },
                   required: ["title", "startTime", "endTime"],
-                  additionalProperties: false,
-                },
-              },
+                  additionalProperties: false
+                }
+              }
             },
             required: ["clips"],
-            additionalProperties: false,
-          },
-        },
-      },
+            additionalProperties: false
+          }
+        }
+      }
     ],
-    tool_choice: { type: "function", function: { name: "report_clips" } },
+    tool_choice: { type: "function", function: { name: "report_clips" } }
   });
 
   const toolCall = response.choices[0]?.message?.tool_calls?.[0];

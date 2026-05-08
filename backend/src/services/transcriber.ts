@@ -6,17 +6,20 @@ import type { Transcript, WordTimestamp } from "../types/index.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-
 function extractAudio(videoPath: string, audioPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn(process.env.FFMPEG_PATH ?? "/opt/homebrew/bin/ffmpeg", [
-      "-i", videoPath,
+      "-i",
+      videoPath,
       "-vn",
-      "-ar", "16000",
-      "-ac", "1",
-      "-b:a", "64k",
+      "-ar",
+      "16000",
+      "-ac",
+      "1",
+      "-b:a",
+      "64k",
       "-y",
-      audioPath,
+      audioPath
     ]);
 
     let stderr = "";
@@ -30,7 +33,7 @@ function extractAudio(videoPath: string, audioPath: string): Promise<void> {
     });
 
     proc.on("error", (err) =>
-      reject(new Error(`Failed to spawn ffmpeg: ${err.message}`)),
+      reject(new Error(`Failed to spawn ffmpeg: ${err.message}`))
     );
   });
 }
@@ -45,13 +48,13 @@ export async function transcribeVideo(videoPath: string): Promise<Transcript> {
       file: createReadStream(audioPath),
       model: "whisper-1",
       response_format: "verbose_json",
-      timestamp_granularities: ["word"],
+      timestamp_granularities: ["word"]
     });
 
     const words: WordTimestamp[] = (response.words ?? []).map((w) => ({
       word: w.word,
       start: w.start,
-      end: w.end,
+      end: w.end
     }));
 
     return { text: response.text, words };

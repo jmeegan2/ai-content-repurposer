@@ -414,3 +414,30 @@ frontend/
         ├── PipelineStatus.tsx # Step indicator with live progress
         └── ClipCard.tsx      # Thumbnail, title, duration, download button
 ```
+
+## 05-08-2026: 06:40 PM
+
+### What was built
+
+- Added Prettier with a root-level `.prettierrc` (double quotes, semicolons, 2-space indent, no trailing commas)
+- Added `.prettierignore` to exclude `node_modules`, `dist`, `coverage`, and `.scannerwork`
+- Added root `package.json` with `husky` and `lint-staged` as devDependencies
+- Wired a Husky pre-commit hook (`npx lint-staged`) that auto-formats all staged `.ts`/`.tsx` files before every commit
+- Ran Prettier across the entire codebase — all backend and frontend source files reformatted to the new style
+
+### Decisions made
+
+- **Root-level Prettier + lint-staged** — enforcing formatting at commit time means style diffs never pollute code review; single config at the repo root covers both `backend/` and `frontend/` without duplication
+- **Double quotes in `.prettierrc`** — matches the existing frontend JSX convention and avoids mixed-quote noise across the codebase
+- **Husky `pre-commit` over CI-only check** — catching formatting locally before push is faster feedback than failing CI; the hook is lightweight (`prettier --write` on staged files only)
+
+### Project structure changes
+
+```
+/
+├── .prettierrc          # Prettier config (double quotes, semi, tabWidth 2)
+├── .prettierignore      # Excludes node_modules/dist/coverage/.scannerwork
+├── package.json         # Root package with husky + lint-staged
+└── .husky/
+    └── pre-commit       # Runs npx lint-staged on commit
+```

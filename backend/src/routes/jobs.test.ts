@@ -3,13 +3,11 @@ import express from "express";
 import request from "supertest";
 
 vi.mock("../services/pipeline.js", () => ({
-  runPipeline: vi.fn(),
+  runPipeline: vi.fn()
 }));
 
 vi.mock("../services/s3.js", () => ({
-  getPresignedUrl: vi
-    .fn()
-    .mockResolvedValue("https://s3.example.com/presigned"),
+  getPresignedUrl: vi.fn().mockResolvedValue("https://s3.example.com/presigned")
 }));
 
 import jobsRouter from "./jobs.js";

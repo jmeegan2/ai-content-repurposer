@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 
 interface Props {
   onSubmit: (url: string) => void;
@@ -6,7 +6,7 @@ interface Props {
 }
 
 export function UrlForm({ onSubmit, disabled }: Props) {
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState("");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
