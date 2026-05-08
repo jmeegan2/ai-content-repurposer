@@ -10,7 +10,7 @@ vi.mock('./api', () => ({
 
 import { createJob, getJob } from './api';
 
-const mockJob = (status = 'queued') => ({
+const mockJob = (status: import('./types').JobStatus = 'queued') => ({
   id: 'job-1',
   youtubeUrl: 'https://youtube.com/watch?v=abc',
   status,
