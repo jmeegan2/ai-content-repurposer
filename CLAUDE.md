@@ -59,8 +59,8 @@ npm run dev      # tsx watch — hot reloads on save
 
 1. yt-dlp download step ✓
 2. Whisper transcription ✓
-3. LLM clip detection ← current
-4. ffmpeg cut + 9:16 crop + caption burn
+3. LLM clip detection ✓
+4. ffmpeg cut + 9:16 crop + caption burn ← current
 5. S3 upload of clips
 6. React + Vite frontend
 7. Supabase DB + auth

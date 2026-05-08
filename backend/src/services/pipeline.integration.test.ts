@@ -23,7 +23,7 @@ describe('pipeline integration', () => {
 
     // Status must progress through every stage in order
     const statuses = patches.map(p => p.status).filter(Boolean);
-    expect(statuses).toEqual(['downloading', 'transcribing', 'detecting', 'done']);
+    expect(statuses).toEqual(['downloading', 'transcribing', 'detecting', 'processing', 'done']);
 
     // Transcript must be populated
     const transcriptPatch = patches.find(p => p.transcript);
@@ -42,6 +42,7 @@ describe('pipeline integration', () => {
       expect(typeof clip.startTime).toBe('number');
       expect(typeof clip.endTime).toBe('number');
       expect(clip.endTime).toBeGreaterThan(clip.startTime);
+      expect(clip.s3Key).toMatch(/^clips\/.+\.mp4$/);
     }
-  }, 3 * 60 * 1000); // 3 minute timeout
+  }, 5 * 60 * 1000); // 5 minute timeout — extended for ffmpeg processing
 });

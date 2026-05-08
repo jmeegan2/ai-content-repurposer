@@ -5,6 +5,7 @@ import { downloadYouTubeVideo } from './downloader.js';
 import { uploadFile } from './s3.js';
 import { transcribeVideo } from './transcriber.js';
 import { detectClips } from './clipDetector.js';
+import { processClip } from './clipper.js';
 
 type UpdateJobFn = (id: string, patch: Partial<Job>) => void;
 
@@ -33,6 +34,15 @@ export async function runPipeline(jobId: string, youtubeUrl: string, updateJob: 
       s3Key: '',
     }));
     updateJob(jobId, { clips });
+
+    updateJob(jobId, { status: 'processing' });
+    for (const clip of clips) {
+      const clipPath = await processClip(filePath, clip, transcript.words, tempDir);
+      const s3Key = `clips/${jobId}/${clip.id}.mp4`;
+      await uploadFile(s3Key, clipPath);
+      clip.s3Key = s3Key;
+    }
+    updateJob(jobId, { clips: [...clips] });
 
     updateJob(jobId, { status: 'done' });
   } catch (err) {
