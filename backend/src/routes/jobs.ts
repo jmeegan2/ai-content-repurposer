@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import type { Job } from '../types/index.js';
 import { runPipeline } from '../services/pipeline.js';
+import { getPresignedUrl } from '../services/s3.js';
 
 const router = Router();
 
@@ -37,10 +38,21 @@ router.post('/', (req, res) => {
   res.status(201).json(job);
 });
 
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   const job = jobs.get(req.params.id);
   if (!job) {
     res.status(404).json({ error: 'Job not found' });
+    return;
+  }
+  if (job.status === 'done' && job.clips.length > 0) {
+    const clips = await Promise.all(
+      job.clips.map(async (clip) => ({
+        ...clip,
+        s3Url: clip.s3Key ? await getPresignedUrl(clip.s3Key, 3600, `${clip.title.replace(/[^\x00-\x7F]/g, '').replace(/[^\w\s-]/g, '').trim()}.mp4`) : undefined,
+        thumbnailUrl: clip.thumbnailKey ? await getPresignedUrl(clip.thumbnailKey) : undefined,
+      }))
+    );
+    res.json({ ...job, clips });
     return;
   }
   res.json(job);

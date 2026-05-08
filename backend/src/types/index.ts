@@ -18,6 +18,8 @@ export interface Clip {
   title: string;
   s3Key: string;
   s3Url?: string;
+  thumbnailKey?: string;
+  thumbnailUrl?: string;
 }
 
 export interface Job {

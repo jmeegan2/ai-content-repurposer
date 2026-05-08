@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises';
 import { v4 as uuidv4 } from 'uuid';
-import type { Job } from '../types/index.js';
+import type { Job, Clip } from '../types/index.js';
 import { downloadYouTubeVideo } from './downloader.js';
 import { uploadFile } from './s3.js';
 import { transcribeVideo } from './transcriber.js';
@@ -26,7 +26,7 @@ export async function runPipeline(jobId: string, youtubeUrl: string, updateJob: 
 
     updateJob(jobId, { status: 'detecting' });
     const detectedClips = await detectClips(transcript);
-    const clips = detectedClips.map(dc => ({
+    const clips: Clip[] = detectedClips.map(dc => ({
       id: uuidv4(),
       startTime: dc.startTime,
       endTime: dc.endTime,
@@ -37,10 +37,18 @@ export async function runPipeline(jobId: string, youtubeUrl: string, updateJob: 
 
     updateJob(jobId, { status: 'processing' });
     for (const clip of clips) {
-      const clipPath = await processClip(filePath, clip, transcript.words, tempDir);
-      const s3Key = `clips/${jobId}/${clip.id}.mp4`;
-      await uploadFile(s3Key, clipPath);
-      clip.s3Key = s3Key;
+      const { clipPath, thumbnailPath } = await processClip(filePath, clip, transcript.words, tempDir);
+
+      const clipS3Key = `clips/${jobId}/${clip.id}.mp4`;
+      const thumbnailS3Key = `thumbnails/${jobId}/${clip.id}.jpg`;
+
+      await Promise.all([
+        uploadFile(clipS3Key, clipPath),
+        uploadFile(thumbnailS3Key, thumbnailPath, 'image/jpeg'),
+      ]);
+
+      clip.s3Key = clipS3Key;
+      clip.thumbnailKey = thumbnailS3Key;
     }
     updateJob(jobId, { clips: [...clips] });
 
