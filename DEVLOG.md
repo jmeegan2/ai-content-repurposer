@@ -349,3 +349,30 @@ backend/src/services/
 .github/
 └── dependabot.yml   # New: weekly npm dependency update checks
 ```
+
+---
+
+## 05-07-2026: 08:54 PM
+
+### What was built
+
+- **`clipper.ts`** — Step 4 of the pipeline: `processClip` takes a source MP4, a `Clip`, and the full word-timestamp array, generates an SRT subtitle file, then invokes ffmpeg to cut the clip, center-crop to 9:16 (1080×1920), and burn captions using TikTok-style styling (white text, black outline, bottom-center)
+- **SRT generation** — words are filtered to the clip's time range, grouped into 4-word caption phrases, and timestamps are adjusted relative to clip start so captions align correctly in the output
+- **`clipper.test.ts`** — 6 unit tests: resolves with output mp4 path, writes SRT before ffmpeg, filters out-of-range words, passes correct seek/duration/crop args to ffmpeg, rejects on non-zero exit code, rejects on spawn failure, and adjusts caption timestamps relative to clip start
+- **Wired into `pipeline.ts`** — added `processing` status stage; `processClip` is called for each detected clip in sequence; `s3Key` is populated on each clip after the ffmpeg step
+- **Pipeline integration test passed end-to-end** — 5 real clips detected and processed from a live YouTube video; presigned S3 URLs confirmed playable
+
+### Decisions made
+
+- **`brew install ffmpeg-full` instead of `brew install ffmpeg`** — the standard Homebrew ffmpeg formula does not include libass, which is required for the `subtitles=` filter used to burn captions. Switching to `ffmpeg-full` (which bundles libass) fixed the filter failure silently surfaced at runtime
+- **Words-per-caption = 4** — keeps individual caption phrases short enough to read on mobile without covering the subject; easy to tune via the `WORDS_PER_CAPTION` constant
+- **`-ss` before `-i` (input seek)** — faster than output seek for long videos; ffmpeg jumps directly to the timestamp without decoding the full file up front
+- **Comma escaping in `force_style`** — ffmpeg's `-vf` filter chain uses commas as separators; `force_style` values containing commas must be escaped as `\,` when calling via `spawn` (no shell quoting available)
+
+### Project structure changes
+
+```
+backend/src/services/
+├── clipper.ts          # New: ffmpeg cut + 9:16 crop + caption burn (Step 4)
+└── clipper.test.ts     # New: unit tests for processClip
+```
