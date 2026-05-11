@@ -12,6 +12,89 @@ vi.mock("../services/s3.js", () => ({
     .mockResolvedValue("https://s3.example.com/presigned"),
 }));
 
+const jobStore = new Map<string, Record<string, unknown>>();
+
+vi.mock("../services/supabase.js", () => {
+  function chain(resolveWith: () => Promise<unknown>): Record<string, unknown> {
+    const obj: Record<string, unknown> = {
+      select: () => obj,
+      eq: () => obj,
+      order: () => resolveWith(),
+      single: () => resolveWith(),
+      upsert: () => Promise.resolve({ error: null }),
+      update: () => obj,
+      then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
+        resolveWith().then(res, rej),
+    };
+    return obj;
+  }
+
+  return {
+    supabase: {
+      from(table: string) {
+        return {
+          insert(data: Record<string, unknown>) {
+            if (table === "jobs") jobStore.set(data.id as string, data);
+            return chain(() =>
+              Promise.resolve({ data, error: null }),
+            );
+          },
+          select() {
+            let filterId: string | undefined;
+            const q: Record<string, unknown> = {
+              eq(col: string, val: unknown) {
+                if (col === "id") filterId = val as string;
+                return q;
+              },
+              order() {
+                return Promise.resolve({
+                  data:
+                    table === "jobs" ? [...jobStore.values()] : [],
+                  error: null,
+                });
+              },
+              single() {
+                if (table === "jobs") {
+                  const job = filterId
+                    ? jobStore.get(filterId)
+                    : undefined;
+                  return job
+                    ? Promise.resolve({ data: job, error: null })
+                    : Promise.resolve({
+                        data: null,
+                        error: { message: "not found" },
+                      });
+                }
+                return Promise.resolve({
+                  data: null,
+                  error: { message: "not found" },
+                });
+              },
+              then(res: (v: unknown) => unknown, rej: (e: unknown) => unknown) {
+                const result =
+                  table === "clips"
+                    ? { data: [], error: null }
+                    : { data: [...jobStore.values()], error: null };
+                return Promise.resolve(result).then(res, rej);
+              },
+            };
+            return q;
+          },
+          update() {
+            return chain(() => Promise.resolve({ error: null }));
+          },
+          upsert() {
+            return Promise.resolve({ error: null });
+          },
+        };
+      },
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "test-user" } }, error: null }),
+      },
+    },
+  };
+});
+
 import jobsRouter from "./jobs.js";
 
 const app = express();
@@ -20,6 +103,7 @@ app.use("/jobs", jobsRouter);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  jobStore.clear();
 });
 
 describe("POST /jobs", () => {

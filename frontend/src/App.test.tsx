@@ -8,6 +8,23 @@ vi.mock("./api", () => ({
   getJob: vi.fn(),
 }));
 
+vi.mock("./lib/supabase", () => ({
+  supabase: {
+    auth: {
+      signOut: vi.fn(),
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+      onAuthStateChange: vi.fn().mockReturnValue({
+        data: { subscription: { unsubscribe: vi.fn() } },
+      }),
+    },
+  },
+}));
+
+vi.mock("./lib/auth", () => ({
+  useSession: vi.fn().mockReturnValue({ user: { id: "test-user" } }),
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 import { createJob, getJob } from "./api";
 
 const mockJob = (status: import("./types").JobStatus = "queued") => ({

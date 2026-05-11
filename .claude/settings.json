@@ -8,7 +8,11 @@
       "Bash(git push*)",
       "Bash(TZ=* date*)",
       "Bash(gh pr create*)",
-      "Bash(gh pr view*)"
+      "Bash(gh pr view*)",
+      "Bash(cd * && npm run test:ci*)",
+      "Bash(cd * && npm run test:coverage*)",
+      "Bash(cd * && npm run test:run*)",
+      "Bash(cd * && npx tsc*)"
     ]
   }
 }
