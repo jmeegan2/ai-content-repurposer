@@ -1,4 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("./lib/supabase", () => ({
+  supabase: {
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+    },
+  },
+}));
+
 import { createJob, getJob } from "./api";
 
 const mockJob = {
@@ -51,6 +60,7 @@ describe("getJob", () => {
 
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost:3001/jobs/550e8400-e29b-41d4-a716-446655440000",
+      expect.objectContaining({ headers: expect.any(Object) }),
     );
     expect(result).toEqual(mockJob);
   });

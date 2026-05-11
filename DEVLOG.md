@@ -450,3 +450,17 @@ frontend/src/
 └── components/
     └── LoginPage.tsx     # Email/password sign-in and sign-up form
 ```
+
+## 05-11-2026: 06:21 PM
+
+### What was built
+
+- Fixed all failing backend and frontend unit tests broken by the Supabase integration
+- Added a stateful Supabase query-builder mock to `jobs.test.ts` so the suite runs without real env vars and correctly exercises insert, select-by-id, and list flows
+- Mocked `./lib/supabase` and `./lib/auth` in `App.test.tsx` so the component renders the main UI instead of `<LoginPage />` during tests
+- Mocked `./lib/supabase` in `api.test.ts` and loosened the `getJob` fetch assertion to allow auth headers
+
+### Decisions made
+
+- **Mock Supabase at the module boundary, not via env vars** — setting dummy env vars would still require a live Supabase URL format; mocking the module is cleaner and keeps tests hermetic
+- **Stateful `jobStore` Map in the mock** — lets `GET /jobs/:id` return the same job created by the preceding `POST /jobs` in the same test, without coupling tests to each other (store is cleared in `beforeEach`)
