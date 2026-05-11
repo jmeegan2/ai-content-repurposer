@@ -414,3 +414,39 @@ frontend/
         ├── PipelineStatus.tsx # Step indicator with live progress
         └── ClipCard.tsx      # Thumbnail, title, duration, download button
 ```
+
+## 05-11-2026: 05:53 PM
+
+### What was built
+
+- **Supabase Postgres DB** — created `jobs` and `clips` tables replacing the in-memory Map; jobs store transcript as JSONB, clips are separate rows linked by `job_id`
+- **Row Level Security** — RLS policies on both tables enforce user isolation at the DB level (`user_id = auth.uid()`)
+- **Backend Supabase client** — service role client in `services/supabase.ts`; bypasses RLS so pipeline writes always succeed regardless of auth state
+- **JWT middleware** — `middleware/auth.ts` validates the Supabase Bearer token on every `/jobs` request; attaches `req.userId`; returns 401 on missing or invalid token
+- **In-memory store replaced** — `routes/jobs.ts` fully rewritten to use Supabase queries; `updateJob` is now async and upserts clips once they have S3 keys
+- **Frontend auth** — `AuthProvider` context tracks Supabase session; `LoginPage` component with email/password sign-in/sign-up toggle; app gates behind login if no session; sign-out button in header
+- **JWT on API calls** — `api.ts` fetches the session token and attaches `Authorization: Bearer <token>` to every request
+
+### Decisions made
+
+- **Service role key on backend, anon key on frontend** — backend needs to bypass RLS for pipeline writes; frontend uses the anon key which respects RLS
+- **Clips upserted only when s3Key is populated** — pipeline sets clips twice (once at detection with empty s3Key, once after processing with keys filled in); only the second upsert hits the DB to avoid partial rows
+- **`UpdateJobFn` made async** — pipeline now awaits each DB write so status updates are consistent and not fire-and-forget
+- **Minimal auth UI for MVP** — no styling polish on login page; will be redesigned before prod
+
+### Project structure changes
+
+```
+backend/src/
+├── middleware/
+│   └── auth.ts           # JWT validation, attaches req.userId
+└── services/
+    └── supabase.ts       # Service role Supabase client
+
+frontend/src/
+├── lib/
+│   ├── supabase.ts       # Anon key Supabase client
+│   └── auth.tsx          # AuthProvider context + useSession hook
+└── components/
+    └── LoginPage.tsx     # Email/password sign-in and sign-up form
+```

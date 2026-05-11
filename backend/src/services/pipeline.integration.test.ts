@@ -14,7 +14,7 @@ describe("pipeline integration", () => {
     "runs all stages end-to-end and lands on done with clips",
     async () => {
       const patches: Partial<Job>[] = [];
-      const updateJob = vi.fn((_id: string, patch: Partial<Job>) => {
+      const updateJob = vi.fn(async (_id: string, patch: Partial<Job>) => {
         patches.push(patch);
       });
 

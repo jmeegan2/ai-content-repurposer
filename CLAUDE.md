@@ -62,8 +62,8 @@ npm run dev      # tsx watch — hot reloads on save
 3. LLM clip detection ✓
 4. ffmpeg cut + 9:16 crop + caption burn ✓
 5. S3 upload of clips ✓
-6. React + Vite frontend ← current
-7. Supabase DB + auth
+6. React + Vite frontend ✓
+7. Supabase DB + auth ← current
 8. Stripe
 
 ## Environment variables (backend/.env)

@@ -4,10 +4,14 @@ import type { Job } from "./types";
 import { UrlForm } from "./components/UrlForm";
 import { PipelineStatus } from "./components/PipelineStatus";
 import { ClipCard } from "./components/ClipCard";
+import { LoginPage } from "./components/LoginPage";
+import { useSession } from "./lib/auth";
+import { supabase } from "./lib/supabase";
 
 const TERMINAL = new Set(["done", "failed"]);
 
 export default function App() {
+  const session = useSession();
   const [job, setJob] = useState<Job | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,16 +45,26 @@ export default function App() {
 
   const isRunning = submitting || (job !== null && !TERMINAL.has(job.status));
 
+  if (!session) return <LoginPage />;
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <div className="max-w-3xl mx-auto px-6 py-12 flex flex-col gap-8">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            AI Repurposer
-          </h1>
-          <p className="text-zinc-500 text-sm mt-1">
-            Paste a YouTube URL. Get 9:16 clips with captions.
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              AI Repurposer
+            </h1>
+            <p className="text-zinc-500 text-sm mt-1">
+              Paste a YouTube URL. Get 9:16 clips with captions.
+            </p>
+          </div>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="text-zinc-500 text-sm hover:text-zinc-300"
+          >
+            Sign out
+          </button>
         </div>
 
         <div className="flex flex-col gap-4">

@@ -7,7 +7,7 @@ import { transcribeVideo } from "./transcriber.js";
 import { detectClips } from "./clipDetector.js";
 import { processClip } from "./clipper.js";
 
-type UpdateJobFn = (id: string, patch: Partial<Job>) => void;
+type UpdateJobFn = (id: string, patch: Partial<Job>) => Promise<void>;
 
 export async function runPipeline(
   jobId: string,
@@ -16,7 +16,7 @@ export async function runPipeline(
 ) {
   let tempDir: string | undefined;
   try {
-    updateJob(jobId, { status: "downloading" });
+    await updateJob(jobId, { status: "downloading" });
     const { filePath, tempDir: dir } = await downloadYouTubeVideo(youtubeUrl);
     tempDir = dir;
 
@@ -24,11 +24,11 @@ export async function runPipeline(
     const s3Key = `raw/${jobId}/${fileName}`;
     await uploadFile(s3Key, filePath);
 
-    updateJob(jobId, { status: "transcribing" });
+    await updateJob(jobId, { status: "transcribing" });
     const transcript = await transcribeVideo(filePath);
-    updateJob(jobId, { transcript });
+    await updateJob(jobId, { transcript });
 
-    updateJob(jobId, { status: "detecting" });
+    await updateJob(jobId, { status: "detecting" });
     const detectedClips = await detectClips(transcript);
     const clips: Clip[] = detectedClips.map((dc) => ({
       id: uuidv4(),
@@ -37,9 +37,8 @@ export async function runPipeline(
       title: dc.title,
       s3Key: "",
     }));
-    updateJob(jobId, { clips });
 
-    updateJob(jobId, { status: "processing" });
+    await updateJob(jobId, { status: "processing" });
     for (const clip of clips) {
       const { clipPath, thumbnailPath } = await processClip(
         filePath,
@@ -59,11 +58,11 @@ export async function runPipeline(
       clip.s3Key = clipS3Key;
       clip.thumbnailKey = thumbnailS3Key;
     }
-    updateJob(jobId, { clips: [...clips] });
+    await updateJob(jobId, { clips: [...clips] });
 
-    updateJob(jobId, { status: "done" });
+    await updateJob(jobId, { status: "done" });
   } catch (err) {
-    updateJob(jobId, {
+    await updateJob(jobId, {
       status: "failed",
       error: err instanceof Error ? err.message : String(err),
     });
