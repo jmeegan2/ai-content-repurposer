@@ -16,6 +16,7 @@ export default function App() {
   const [job, setJob] = useState<Job | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"dashboard" | "pricing">("dashboard");
 
   useEffect(() => {
     if (!job || TERMINAL.has(job.status)) return;
@@ -43,8 +44,6 @@ export default function App() {
       setSubmitting(false);
     }
   }
-
-  const [view, setView] = useState<"dashboard" | "pricing">("dashboard");
 
   const isRunning = submitting || (job !== null && !TERMINAL.has(job.status));
 
