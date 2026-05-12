@@ -1,11 +1,17 @@
 # PR Workflow
 
 ## Goal
-Create a pull request against `main` on origin. DEVLOG.md is updated and committed **before** the push so it's included in the PR.
+Create a pull request against `main` on origin. DEVLOG.md is updated and committed **before** the PR is created so it's included.
 
 ---
 
 ## Steps
+
+### 0. Branch safety check
+```bash
+git branch --show-current
+```
+If the output is `main`, **STOP immediately**. Tell the user: "You're on main — switch to a feature branch before running /pr." Do not proceed past this point.
 
 ### 1. Understand the branch
 Run these in parallel:
@@ -13,15 +19,13 @@ Run these in parallel:
 - `git log main..HEAD` — see commits on this branch vs main
 
 ### 2. Update DEVLOG.md
-Run `/update-devlog` — it handles the timestamp, entry format, and commit.
+Run `/update-devlog` — it handles the timestamp and entry format.
 
-### 3. Run an AI review
+### 3. Commit and push
+Run `/commit` — this stages relevant files (including the DEVLOG update), commits, and pushes to the current branch.
+
+### 4. Run an AI review
 Run `/review` on the branch changes. Use only the **key findings** section or a short bullet summary — do not paste a full breakdown. Embed the condensed output in the PR body.
-
-### 4. Push the branch
-```bash
-git push -u origin HEAD
-```
 
 ### 5. Create the PR
 Use this exact format, inserting the `/review` output under `## AI Review`:

@@ -465,6 +465,29 @@ frontend/src/
 - **Mock Supabase at the module boundary, not via env vars** — setting dummy env vars would still require a live Supabase URL format; mocking the module is cleaner and keeps tests hermetic
 - **Stateful `jobStore` Map in the mock** — lets `GET /jobs/:id` return the same job created by the preceding `POST /jobs` in the same test, without coupling tests to each other (store is cleared in `beforeEach`)
 
+## 05-11-2026: 06:36 PM
+
+### What was built
+
+- Updated `.claude/commands/pr.md` to add a branch safety check (Step 0) that halts the workflow if the current branch is `main`
+- Reordered PR workflow steps so `/commit` runs before `/review`, keeping the push and review in the correct sequence
+- Removed unused `.claude/commands/sonar.md` (SonarCloud scan workflow)
+- Removed unused `.claude/commands/sync.md` (rebase-onto-main workflow)
+
+### Decisions made
+
+- **Branch safety check added to `/pr`** — without it, running `/pr` on `main` would push directly and create a PR against itself, which is a footgun
+- **Removed sonar and sync commands** — neither command was being used in practice; removing them keeps the command set lean and avoids maintaining stale documentation
+
+### Project structure changes
+
+```
+.claude/commands/
+├── pr.md       # updated — added Step 0 branch check, reordered steps
+├── sonar.md    # deleted
+└── sync.md     # deleted
+```
+
 ## 05-12-2026: 03:23 PM
 
 ### What was built
