@@ -5,6 +5,7 @@ import { UrlForm } from "./components/UrlForm";
 import { PipelineStatus } from "./components/PipelineStatus";
 import { ClipCard } from "./components/ClipCard";
 import { LoginPage } from "./components/LoginPage";
+import { PricingPage } from "./components/PricingPage";
 import { useSession } from "./lib/auth";
 import { supabase } from "./lib/supabase";
 
@@ -43,9 +44,12 @@ export default function App() {
     }
   }
 
+  const [view, setView] = useState<"dashboard" | "pricing">("dashboard");
+
   const isRunning = submitting || (job !== null && !TERMINAL.has(job.status));
 
   if (!session) return <LoginPage />;
+  if (view === "pricing") return <PricingPage onBack={() => setView("dashboard")} />;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -59,12 +63,20 @@ export default function App() {
               Paste a YouTube URL. Get 9:16 clips with captions.
             </p>
           </div>
-          <button
-            onClick={() => supabase.auth.signOut()}
-            className="text-zinc-500 text-sm hover:text-zinc-300"
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setView("pricing")}
+              className="text-zinc-400 text-sm hover:text-zinc-200"
+            >
+              Upgrade
+            </button>
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="text-zinc-500 text-sm hover:text-zinc-300"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col gap-4">
