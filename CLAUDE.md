@@ -63,8 +63,8 @@ npm run dev      # tsx watch — hot reloads on save
 4. ffmpeg cut + 9:16 crop + caption burn ✓
 5. S3 upload of clips ✓
 6. React + Vite frontend ✓
-7. Supabase DB + auth ← current
-8. Stripe
+7. Supabase DB + auth 
+8. Stripe ← current
 
 ## Environment variables (backend/.env)
 
@@ -78,6 +78,7 @@ AWS_SECRET_ACCESS_KEY=
 AWS_S3_BUCKET=ai-repurposer-clips
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_ID=
 ```
 
 ## Things to keep in mind

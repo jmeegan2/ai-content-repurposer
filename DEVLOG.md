@@ -487,3 +487,43 @@ frontend/src/
 ├── sonar.md    # deleted
 └── sync.md     # deleted
 ```
+
+## 05-12-2026: 03:23 PM
+
+### What was built
+
+- **Stripe integration foundation (Step 8)** — installed `stripe` SDK, wired up three backend endpoints and a placeholder pricing page; no feature gating yet, just the plumbing
+- **`services/stripe.ts`** — Stripe client singleton plus three helpers: `getOrCreateCustomer` (looks up profile, creates Stripe customer if none, writes `stripe_customer_id` back to `profiles`), `createCheckoutSession` (subscription mode checkout), `createPortalSession` (Stripe Billing Portal)
+- **`routes/stripe.ts`** — `POST /stripe/create-checkout-session`, `POST /stripe/create-portal-session` (both behind `requireAuth` at mount), and `POST /stripe/webhook` (raw-body, signature-verified, handles `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`)
+- **Webhook raw-body handling** — `webhookRouter` registered before `express.json()` in `index.ts` so Stripe signature verification receives the unmodified buffer
+- **`profiles` table** — created in Supabase via SQL editor; stores `stripe_customer_id` and `subscription_status` per user; trigger auto-inserts a row on every new auth signup
+- **Unit tests** — `services/stripe.test.ts` (6 tests: customer lookup, customer creation + DB write, checkout session, portal session) and `routes/stripe.test.ts` (11 tests: all three endpoints including webhook signature rejection and all three event types)
+- **Integration test** — `services/stripe.integration.test.ts` hits real Stripe test API: creates a customer, verifies it; `createCheckoutSession` skipped until `STRIPE_PRICE_ID` is set; two webhook signing tests use `stripe.webhooks.generateTestHeaderString` to verify real HMAC construction and tamper detection without needing a live webhook secret
+- **Pricing page** — `PricingPage.tsx` placeholder with a single Pro plan card; calls `POST /stripe/create-checkout-session` and redirects to the returned Stripe Checkout URL; Upgrade button added to the main dashboard header
+
+### Decisions made
+
+- **`requireAuth` at mount level, not per-route** — consistent with how `jobsRouter` works; keeps routes testable without passing auth tokens in tests
+- **Webhook router split from main router** — `webhookRouter` and default `stripeRouter` exported separately so `index.ts` can register the raw-body webhook before `express.json()` without affecting the authenticated routes
+- **`stripe.webhooks.generateTestHeaderString` for integration test** — tests real HMAC signing/verification without needing a Stripe CLI or live webhook secret; same approach Stripe recommends in their own docs
+- **`it.skipIf(!process.env.STRIPE_PRICE_ID)` on checkout session test** — checkout requires a real price; skip gracefully until a product is created in the Stripe dashboard rather than failing CI
+- **No feature gating yet** — `subscription_status` is stored and kept in sync via webhooks; the actual `if (status !== 'active') 403` guard in `routes/jobs.ts` is a one-liner deferred until the product is ready to monetize
+
+### Project structure changes
+
+```
+backend/src/
+├── routes/
+│   ├── stripe.ts               # New: checkout session, portal session, webhook endpoints
+│   └── stripe.test.ts          # New: unit tests for all three endpoints
+└── services/
+    ├── stripe.ts               # New: Stripe client + getOrCreateCustomer, createCheckoutSession, createPortalSession
+    ├── stripe.test.ts          # New: unit tests for service helpers
+    └── stripe.integration.test.ts  # New: real Stripe API + webhook signing tests
+
+frontend/src/
+├── api.ts                      # Updated: added createCheckoutSession
+├── App.tsx                     # Updated: Upgrade button in header, pricing view toggle
+└── components/
+    └── PricingPage.tsx         # New: placeholder pricing page with Pro plan card
+```

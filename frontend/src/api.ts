@@ -35,3 +35,14 @@ export async function getJob(id: string): Promise<Job> {
   if (!res.ok) throw new Error("Failed to fetch job");
   return res.json();
 }
+
+export async function createCheckoutSession(email: string): Promise<string> {
+  const res = await fetch(`${BASE}/stripe/create-checkout-session`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error("Failed to create checkout session");
+  const data = (await res.json()) as { url: string };
+  return data.url;
+}
