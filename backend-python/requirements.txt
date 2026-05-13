@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+openai>=1.0.0
+boto3
+stripe
+supabase
+mediapipe==0.10.14
+opencv-python==4.10.0.84
+numpy>=1.24,<2.0
+python-dotenv
+pydantic
+httpx
+pytest
+pytest-asyncio

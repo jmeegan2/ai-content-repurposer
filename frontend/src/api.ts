@@ -1,7 +1,7 @@
 import type { Job } from "./types";
 import { supabase } from "./lib/supabase";
 
-const BASE = "http://localhost:3001";
+const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
