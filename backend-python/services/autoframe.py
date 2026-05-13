@@ -1,7 +1,6 @@
 import os
 import subprocess
 import tempfile
-from collections import deque
 
 import cv2
 import mediapipe as mp
@@ -9,9 +8,10 @@ import numpy as np
 
 TARGET_W = 1080
 TARGET_H = 1920
-SAMPLE_EVERY = 5
-SMOOTH_WINDOW = 30
-DEADZONE_RATIO = 0.05
+DETECT_INTERVAL = 0.25  # run face detection every 0.25s (time-based, not frame-based)
+DEADZONE_RATIO = 0.15   # 15% of crop width — camera ignores movement within this zone
+SMOOTH_FACTOR = 0.50    # lerp per keyframe toward face — higher = follows faster, less lag
+SNAP_THRESHOLD = 0.40   # 40% of src width — only snap on genuine scene cuts, not head movement
 _FFMPEG = os.environ.get("FFMPEG_PATH", "/opt/homebrew/bin/ffmpeg")
 
 
@@ -30,8 +30,7 @@ def process_clip(input_path: str, start_time: float, end_time: float, output_pat
     if crop_w > src_w:
         crop_w = src_w  # source is already portrait
 
-    centers = _detect_face_centers(cap, start_frame, total_frames, src_w)
-    crop_xs = _smooth_and_clamp(centers, src_w, crop_w)
+    crop_xs = _detect_and_smooth(cap, start_time, duration, fps, src_w, src_h, crop_w)
 
     tmp_silent = tempfile.mktemp(suffix="_silent.mp4")
     try:
@@ -44,65 +43,113 @@ def process_clip(input_path: str, start_time: float, end_time: float, output_pat
             os.unlink(tmp_silent)
 
 
-def _detect_face_centers(cap: cv2.VideoCapture, start_frame: int, total_frames: int, src_w: int) -> list[int]:
+# NOTE: tracking still feels jumpy on real talking-head content.
+# Root cause: we're doing face *detection* (independent per keyframe) not face *tracking*.
+# Each 0.25s keyframe finds the face from scratch with no memory of the previous frame.
+# When detection is slightly off (face partially occluded, head turned, lighting change),
+# the camera position snaps to the wrong spot.
+#
+# Real fix: swap MediaPipe FaceDetection for a proper tracker like ByteTrack or DeepSORT.
+# A tracker detects once then follows the bounding box across frames using motion prediction —
+# much more stable because it doesn't lose the face between samples.
+# Opus Clips and similar tools almost certainly use this approach.
+#
+# Secondary option: YOLOv8-face instead of MediaPipe BlazeFace — more accurate detections
+# means fewer bad keyframes to smooth over.
+def _detect_and_smooth(
+    cap: cv2.VideoCapture,
+    start_time: float,
+    duration: float,
+    fps: float,
+    src_w: int,
+    src_h: int,
+    crop_w: int,
+) -> list[int]:
+    """
+    Two-pass algorithm (ported from opensource-clipping/studio/core.py):
+      Pass 1 — collect raw face-center keyframes every DETECT_INTERVAL seconds
+      Pass 2 — smooth keyframes with deadzone + lerp + snap detection
+      Then linearly interpolate keyframes to per-frame crop positions.
+    """
     detector = mp.solutions.face_detection.FaceDetection(
         model_selection=0, min_detection_confidence=0.5
     )
-    sampled: dict[int, int] = {}
+    default_cx = src_w // 2
+    default_cy = src_h // 2
+    total_frames = int(duration * fps)
 
-    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-    for i in range(total_frames):
+    # Pass 1: raw detection at time-based intervals
+    raw: list[dict] = []
+    t = 0.0
+    while t <= duration:
+        frame_idx = int(start_time * fps) + int(t * fps)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
         ret, frame = cap.read()
-        if not ret:
-            break
-        if i % SAMPLE_EVERY == 0:
+        cx, cy = default_cx, default_cy
+        if ret:
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             result = detector.process(rgb)
             if result.detections:
-                bbox = result.detections[0].location_data.relative_bounding_box
+                # Pick largest face by bounding box area
+                best = max(
+                    result.detections,
+                    key=lambda d: d.location_data.relative_bounding_box.width
+                    * d.location_data.relative_bounding_box.height,
+                )
+                bbox = best.location_data.relative_bounding_box
                 cx = int((bbox.xmin + bbox.width / 2) * src_w)
-                sampled[i] = cx
+                cy = int((bbox.ymin + bbox.height / 2) * src_h)
+        raw.append({"t": t, "cx": cx, "cy": cy})
+        t += DETECT_INTERVAL
 
     detector.close()
-    return _interpolate_centers(sampled, total_frames, src_w // 2)
 
+    # Pass 2: smooth keyframes
+    deadzone_px = crop_w * DEADZONE_RATIO
+    snap_px = src_w * SNAP_THRESHOLD
 
-def _interpolate_centers(sampled: dict[int, int], n: int, default: int) -> list[int]:
-    if not sampled:
-        return [default] * n
+    # Initialise camera at median of first 5 detections
+    init_cxs = [d["cx"] for d in raw[:5]]
+    cam_cx = float(int(np.median(init_cxs)))
 
-    result = [default] * n
-    keys = sorted(sampled.keys())
+    smooth: list[dict] = []
+    for d in raw:
+        face_cx = float(d["cx"])
+        diff = face_cx - cam_cx
+        if abs(diff) > snap_px:
+            cam_cx = face_cx  # hard cut — face jumped (scene change)
+        else:
+            if face_cx > cam_cx + deadzone_px:
+                cam_cx += (face_cx - (cam_cx + deadzone_px)) * SMOOTH_FACTOR
+            elif face_cx < cam_cx - deadzone_px:
+                cam_cx += (face_cx - (cam_cx - deadzone_px)) * SMOOTH_FACTOR
+        smooth.append({"t": d["t"], "cx": cam_cx})
 
-    for i in range(keys[0]):
-        result[i] = sampled[keys[0]]
+    # Interpolate smoothed keyframes to per-frame crop positions
+    def _cam_x_at(t: float) -> float:
+        if t <= smooth[0]["t"]:
+            return smooth[0]["cx"]
+        if t >= smooth[-1]["t"]:
+            return smooth[-1]["cx"]
+        for i in range(len(smooth) - 1):
+            t1, t2 = smooth[i]["t"], smooth[i + 1]["t"]
+            if t1 <= t <= t2:
+                if t1 == t2:
+                    return smooth[i]["cx"]
+                cx1, cx2 = smooth[i]["cx"], smooth[i + 1]["cx"]
+                # At snap points, hold previous position until the keyframe boundary
+                # instead of panning — makes scene cuts look like cuts, not pans
+                if abs(cx2 - cx1) > snap_px:
+                    return cx1
+                alpha = (t - t1) / (t2 - t1)
+                return cx1 + alpha * (cx2 - cx1)
+        return smooth[-1]["cx"]
 
-    for j in range(len(keys) - 1):
-        a, b = keys[j], keys[j + 1]
-        for i in range(a, b + 1):
-            t = (i - a) / (b - a)
-            result[i] = int(sampled[a] + t * (sampled[b] - sampled[a]))
-
-    for i in range(keys[-1], n):
-        result[i] = sampled[keys[-1]]
-
-    return result
-
-
-def _smooth_and_clamp(centers: list[int], src_w: int, crop_w: int) -> list[int]:
-    buf: deque = deque(maxlen=SMOOTH_WINDOW)
-    smoothed = []
-    for c in centers:
-        buf.append(c)
-        smoothed.append(int(np.mean(buf)))
-
-    deadzone_px = DEADZONE_RATIO * src_w
-    committed = smoothed[0] if smoothed else src_w // 2
     result = []
-    for s in smoothed:
-        if abs(s - committed) > deadzone_px:
-            committed = s
-        crop_x = committed - crop_w // 2
+    for i in range(total_frames):
+        t = i / fps
+        cam_cx_now = _cam_x_at(t)
+        crop_x = int(cam_cx_now) - crop_w // 2
         crop_x = max(0, min(crop_x, src_w - crop_w))
         result.append(crop_x)
 
