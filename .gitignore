@@ -12,3 +12,6 @@ __pycache__/
 *.pyo
 .pytest_cache/
 .mypy_cache/
+
+# Test media
+backend-python/tests/media for testing/

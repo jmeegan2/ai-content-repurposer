@@ -582,3 +582,21 @@ backend-python/
     ├── test_clip_detector_integration.py
     └── test_transcriber_integration.py
 ```
+
+---
+
+## 05-14-2026: 05:12 PM
+
+### What was built
+
+- **Opus-style fixed-crop-per-segment autoframing (Version B)** — rewrote `autoframe.py` to use a static median crop per scene segment instead of continuous face tracking; eliminates panning and jitter entirely
+- **Scene cut detection** — `_detect_cuts` uses ffmpeg's `scdet` filter to find cut boundaries within a clip; segment boundaries are offset by +1 frame so the crop jumps on the first frame of the new scene, not the last frame of the old one
+- **Version A preserved** — original lerp/deadzone/keyframe algorithm kept as `_detect_and_smooth_v1`; `TRACKING_VERSION = "A" | "B"` flag at the top of the file switches between them
+- **`.gitignore` updated** — `backend-python/tests/media for testing/` excluded (large video files, not suitable for git)
+
+### Decisions made
+
+- **Static median crop over Kalman/lerp tracking** — continuous tracking (Kalman filter, lerp) causes the camera to follow every face movement, creating a panning look; Opus Clips uses a fixed crop per shot — detect all faces in the segment, take the median x, lock the crop there for the entire segment; zero movement within a shot, hard jump at cuts
+- **Median over mean for segment face center** — median is robust to bad MediaPipe detections (frames where the face is partially occluded or misdetected); mean would be pulled toward outliers
+- **Sequential frame reads** — Version B reads all frames in one sequential pass for detection, faster than Version A's random `cap.set(CAP_PROP_POS_FRAMES)` seeks on every keyframe
+- **scdet threshold = 10** — catches hard cuts without false-positiving on normal head movement; lower to 5 if cuts are being missed
