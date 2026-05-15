@@ -7,87 +7,55 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
+# Output dimensions for 9:16 vertical video (TikTok / Reels / Shorts)
 TARGET_W = 1080
 TARGET_H = 1920
-SNAP_THRESHOLD = 0.40   # fraction of src_w — hard snap on genuine scene change (both versions)
+
+# If the face jumps more than 40% of the source width between frames, treat it as a
+# hard scene cut rather than movement — avoids the camera chasing a false detection.
+SNAP_THRESHOLD = 0.40
+
 _FFMPEG = os.environ.get("FFMPEG_PATH", "/opt/homebrew/bin/ffmpeg")
-
-# "A" — sampled detection every 0.25s + lerp smoothing (original approach)
-# "B" — per-frame sequential detection + 1D Kalman filter (pro approach, no panning artifacts)
-TRACKING_VERSION = "B"
-
-# Version A tuning (unused when TRACKING_VERSION = "B")
-DETECT_INTERVAL = 0.25  # detect every 0.25s
-DEADZONE_RATIO = 0.04   # fraction of crop_w — ignore movement within this zone
-SMOOTH_FACTOR = 0.85    # lerp factor per keyframe toward face center
-
-
-"""
-couple of issues
-
-its not reliably framing the person in the middle of the frame
-
-still when it cuts it is like panning over to the persons face
-
-"""
-
-"""
-Root causes:
-
-Issue 1 — face off-center:
-  - DEADZONE_RATIO = 0.15 was too wide. The camera won't move if the face is within ±15% of the
-    crop width of center (~90px in source space), so the face sits visibly off-center and the
-    algorithm considers it fine.
-  - SMOOTH_FACTOR = 0.50 meant each 0.25s keyframe only closed half the remaining gap to the face.
-    After any head movement the camera spent several keyframes crawling toward center. The face
-    never fully settled.
-  Fix: lowered DEADZONE_RATIO to 0.04, raised SMOOTH_FACTOR to 0.85.
-
-Issue 2 — camera pans onto face at cuts:
-  - When a scene cut is detected, _cam_x_at jumps to cx2 (the next smoothed keyframe). But cx2 was
-    produced by the lerp in Pass 2, so it's only partway to the new face position. Every frame
-    between the cut and the next keyframe (up to 0.25s) shows the camera still drifting toward
-    where the face actually is.
-  Fix: in Pass 2, when a keyframe immediately follows a detected cut time, bypass the lerp and snap
-  cam_cx = face_cx directly. That way cx2 is the actual detected face center, so the post-cut jump
-  lands on the face instead of a mid-pan value.
-  Change: `for d in raw` → `for i, d in enumerate(raw)`, then check
-  `any(prev_t < ct <= d["t"] for ct in cut_times)` and snap if true.
-
-Version B addresses both issues at the root:
-  - Per-frame detection (no 0.25s sample gap) eliminates the interpolation lag that causes panning.
-  - 1D Kalman filter models face position + velocity — smooth, physically-motivated camera movement
-    with no fixed deadzone keeping the face off-center.
-  - Hard Kalman reset at detected scene cuts — camera jumps instantly to the new face, no pan.
-  - Sequential frame reads (no random seeks) — faster than Version A's sampled seeks.
-"""
 
 
 def process_clip(input_path: str, start_time: float, end_time: float, output_path: str) -> None:
-    """Render a face-tracked 9:16 crop of input_path[start_time:end_time] to output_path."""
+    """
+    Main entry point. Given a source video and a time range, produces a face-tracked
+    9:16 crop at output_path with audio intact.
+
+    High-level flow:
+      1. Find scene cuts within the clip (so we never pan across a hard cut).
+      2. Run face detection on every frame and compute a static crop per scene segment.
+      3. Render the cropped frames to a silent temp file.
+      4. Mux the original audio back in and write the final output.
+    """
     duration = end_time - start_time
     cap = cv2.VideoCapture(input_path)
 
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    source_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    source_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     start_frame = int(start_time * fps)
     total_frames = int(duration * fps)
 
-    crop_w = int(src_h * 9 / 16)
-    if crop_w > src_w:
-        crop_w = src_w
+    # The crop window is as wide as a 9:16 slice of the source height.
+    # Capped at source_width so we never try to crop wider than the video itself.
+    crop_width = int(source_height * 9 / 16)
+    if crop_width > source_width:
+        crop_width = source_width
 
+    # Step 1: find timestamps (relative to clip start) where a scene cut happens
     cut_times = _detect_cuts(input_path, start_time, duration)
 
-    if TRACKING_VERSION == "B":
-        crop_xs = _detect_and_smooth_v2(cap, start_time, duration, fps, src_w, src_h, crop_w, cut_times)
-    else:
-        crop_xs = _detect_and_smooth_v1(cap, start_time, duration, fps, src_w, src_h, crop_w, cut_times)
+    # Step 2: for each frame, decide where to place the left edge of the crop window
+    per_frame_crop_x = _detect_and_smooth(
+        cap, start_time, duration, fps, source_width, source_height, crop_width, cut_times
+    )
 
+    # Steps 3 & 4: render to a silent temp file, then mux audio from the source
     tmp_silent = tempfile.mktemp(suffix="_silent.mp4")
     try:
-        _render_frames(cap, start_frame, total_frames, crop_xs, crop_w, tmp_silent, fps)
+        _render_frames(cap, start_frame, total_frames, per_frame_crop_x, crop_width, tmp_silent, fps)
         cap.release()
         _mux_audio(input_path, start_time, duration, tmp_silent, output_path)
     finally:
@@ -98,9 +66,11 @@ def process_clip(input_path: str, start_time: float, end_time: float, output_pat
 
 def _detect_cuts(input_path: str, start_time: float, duration: float, threshold: float = 10.0) -> list[float]:
     """
-    Returns timestamps (relative to clip start) where scene cuts occur,
-    using ffmpeg's scdet filter. Takes ~1-2s per clip but eliminates
-    the camera pan-onto-face artifact at cut points.
+    Uses ffmpeg's scene-change detector (scdet) to find hard cuts in the clip.
+    Returns timestamps in seconds, relative to the clip's start_time.
+
+    We need these so _detect_and_smooth can treat each scene as its own independent
+    segment — otherwise the crop would try to pan smoothly across a jump cut.
     """
     result = subprocess.run(
         [
@@ -109,206 +79,126 @@ def _detect_cuts(input_path: str, start_time: float, duration: float, threshold:
             "-t", str(duration),
             "-i", input_path,
             "-vf", f"scdet=threshold={threshold}",
-            "-f", "null", "-",
+            "-f", "null", "-",   # no output file — we only care about the stderr log
         ],
         capture_output=True,
         text=True,
     )
-    cuts = []
+
+    cut_timestamps = []
     for line in result.stderr.splitlines():
         if "scdet" not in line.lower():
             continue
-        m = re.search(r'pts_time[:\s]+([0-9.]+)', line)
-        if not m:
-            m = re.search(r'time[:\s]+([0-9.]+)', line)
-        if m:
-            cuts.append(float(m.group(1)))
-    return cuts
+        # ffmpeg logs cut timestamps in slightly different formats depending on version
+        match = re.search(r'pts_time[:\s]+([0-9.]+)', line)
+        if not match:
+            match = re.search(r'time[:\s]+([0-9.]+)', line)
+        if match:
+            cut_timestamps.append(float(match.group(1)))
+
+    return cut_timestamps
 
 
-# ─── Version A ───────────────────────────────────────────────────────────────
-# NOTE: tracking still feels jumpy on real talking-head content.
-# Root cause: we're doing face *detection* (independent per keyframe) not face *tracking*.
-# Each 0.25s keyframe finds the face from scratch with no memory of the previous frame.
-# When detection is slightly off (face partially occluded, head turned, lighting change),
-# the camera position snaps to the wrong spot.
-def _detect_and_smooth_v1(
+def _detect_and_smooth(
     cap: cv2.VideoCapture,
     start_time: float,
     duration: float,
     fps: float,
-    src_w: int,
-    src_h: int,
-    crop_w: int,
+    source_width: int,
+    source_height: int,
+    crop_width: int,
     cut_times: list[float],
 ) -> list[int]:
     """
-    Original two-pass algorithm:
-      Pass 1 — collect raw face-center keyframes every DETECT_INTERVAL seconds
-      Pass 2 — smooth keyframes with deadzone + lerp + snap detection
-      Then linearly interpolate keyframes to per-frame crop positions.
+    Computes the crop x position for every frame in the clip.
+
+    Strategy — per-segment static crop:
+      - Scan every frame and record where the face center is (in pixels from the left).
+      - Split the clip into segments at detected scene cuts.
+      - For each segment, take the median face-center x across all frames in that segment.
+        Median is used instead of mean so a few bad detections don't skew the position.
+      - Every frame in a segment gets the same static crop x — no camera movement within
+        a scene, which eliminates jitter and panning artifacts.
+      - At a scene cut the crop hard-jumps to the next segment's position, matching
+        how Opus Clips and similar tools look.
+
+    Returns a list of crop_x values (left edge of the crop window), one per frame.
     """
-    detector = mp.solutions.face_detection.FaceDetection(
-        model_selection=0, min_detection_confidence=0.5
-    )
-    default_cx = src_w // 2
-    default_cy = src_h // 2
-    total_frames = int(duration * fps)
-
-    # Pass 1: raw detection at time-based intervals
-    raw: list[dict] = []
-    t = 0.0
-    while t <= duration:
-        frame_idx = int(start_time * fps) + int(t * fps)
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-        ret, frame = cap.read()
-        cx, cy = default_cx, default_cy
-        if ret:
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            result = detector.process(rgb)
-            if result.detections:
-                best = max(
-                    result.detections,
-                    key=lambda d: d.location_data.relative_bounding_box.width
-                    * d.location_data.relative_bounding_box.height,
-                )
-                bbox = best.location_data.relative_bounding_box
-                cx = int((bbox.xmin + bbox.width / 2) * src_w)
-                cy = int((bbox.ymin + bbox.height / 2) * src_h)
-        raw.append({"t": t, "cx": cx, "cy": cy})
-        t += DETECT_INTERVAL
-
-    detector.close()
-
-    # Pass 2: smooth keyframes
-    deadzone_px = crop_w * DEADZONE_RATIO
-    snap_px = src_w * SNAP_THRESHOLD
-
-    init_cxs = [d["cx"] for d in raw[:5]]
-    cam_cx = float(int(np.median(init_cxs)))
-
-    smooth: list[dict] = []
-    for d in raw:
-        face_cx = float(d["cx"])
-        diff = face_cx - cam_cx
-        if abs(diff) > snap_px:
-            cam_cx = face_cx
-        else:
-            if face_cx > cam_cx + deadzone_px:
-                cam_cx += (face_cx - (cam_cx + deadzone_px)) * SMOOTH_FACTOR
-            elif face_cx < cam_cx - deadzone_px:
-                cam_cx += (face_cx - (cam_cx - deadzone_px)) * SMOOTH_FACTOR
-        smooth.append({"t": d["t"], "cx": cam_cx})
-
-    def _cam_x_at(t: float) -> float:
-        if t <= smooth[0]["t"]:
-            return smooth[0]["cx"]
-        if t >= smooth[-1]["t"]:
-            return smooth[-1]["cx"]
-        for i in range(len(smooth) - 1):
-            t1, t2 = smooth[i]["t"], smooth[i + 1]["t"]
-            if t1 <= t <= t2:
-                if t1 == t2:
-                    return smooth[i]["cx"]
-                cx1, cx2 = smooth[i]["cx"], smooth[i + 1]["cx"]
-                cuts_here = [ct for ct in cut_times if t1 < ct <= t2]
-                if cuts_here:
-                    cut_t = cuts_here[0]
-                    return cx1 if t < cut_t else cx2
-                if abs(cx2 - cx1) > snap_px:
-                    return cx1
-                alpha = (t - t1) / (t2 - t1)
-                return cx1 + alpha * (cx2 - cx1)
-        return smooth[-1]["cx"]
-
-    result = []
-    for i in range(total_frames):
-        t = i / fps
-        cam_cx_now = _cam_x_at(t)
-        crop_x = int(cam_cx_now) - crop_w // 2
-        crop_x = max(0, min(crop_x, src_w - crop_w))
-        result.append(crop_x)
-
-    return result
-
-
-# ─── Version B ───────────────────────────────────────────────────────────────
-def _detect_and_smooth_v2(
-    cap: cv2.VideoCapture,
-    start_time: float,
-    duration: float,
-    fps: float,
-    src_w: int,
-    src_h: int,
-    crop_w: int,
-    cut_times: list[float],
-) -> list[int]:
-    """
-    Opus-style fixed-crop-per-segment approach:
-
-    - Split the clip into segments at detected scene cuts.
-    - For each segment, collect all face detections and take the median x position.
-    - Use that single x value as a completely static crop for the entire segment.
-    - At segment boundaries, hard-jump to the next segment's median.
-
-    No camera movement within a segment = zero jitter, zero panning.
-    Crisp hard cut at boundaries = matches how Opus Clips looks.
-    """
-    detector = mp.solutions.face_detection.FaceDetection(
+    # This is where the ML happens — MediaPipe runs a lightweight on-device face detection
+    # model on every frame to find the face's bounding box. No API call, runs locally.
+    # It's not making editorial decisions (that was GPT-4o upstream) — it's just answering
+    # "where is the face in this frame?" so we know where to point the crop window.
+    face_detector = mp.solutions.face_detection.FaceDetection(
         model_selection=0, min_detection_confidence=0.5
     )
 
     start_frame = int(start_time * fps)
     total_frames = int(duration * fps)
-    default_cx = float(src_w // 2)
+    fallback_center_x = float(source_width // 2)  # used when no face is detected at all
 
-    # Collect per-frame detections sequentially
-    raw_cxs: list[float | None] = []
+    # Pass 1 — collect the face center x for every frame (None when no face found)
+    face_center_x_per_frame: list[float | None] = []
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+
     for _ in range(total_frames):
         ret, frame = cap.read()
         if not ret:
-            raw_cxs.append(None)
+            face_center_x_per_frame.append(None)
             continue
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        det = detector.process(rgb)
-        if det.detections:
-            best = max(
-                det.detections,
+
+        # MediaPipe requires RGB; OpenCV gives us BGR
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        detection_result = face_detector.process(rgb_frame)
+
+        if detection_result.detections:
+            # If multiple faces detected, use the largest one (most likely the main subject)
+            largest_face = max(
+                detection_result.detections,
                 key=lambda d: d.location_data.relative_bounding_box.width
                 * d.location_data.relative_bounding_box.height,
             )
-            bbox = best.location_data.relative_bounding_box
-            raw_cxs.append((bbox.xmin + bbox.width / 2) * src_w)
+            bbox = largest_face.location_data.relative_bounding_box
+            # bbox values are 0–1 fractions of the frame; convert to pixel x coordinate
+            face_cx_pixels = (bbox.xmin + bbox.width / 2) * source_width
+            face_center_x_per_frame.append(face_cx_pixels)
         else:
-            raw_cxs.append(None)
+            face_center_x_per_frame.append(None)
 
-    detector.close()
+    face_detector.close()
 
-    # Build segment boundaries: [0, cut_frame_1, cut_frame_2, ..., total_frames]
-    segment_starts = [0] + sorted(int(ct * fps) + 1 for ct in cut_times)
-    segment_starts = [s for s in segment_starts if 0 <= s < total_frames]
-    segment_ranges = list(zip(segment_starts, segment_starts[1:] + [total_frames]))
+    # Pass 2 — build segment boundaries from cut timestamps, then assign a static
+    # crop x to every frame based on the median face position within its segment.
 
-    # For each segment compute the median face cx across all valid detections in it
-    def segment_median_cx(start: int, end: int) -> float:
-        detections = [cx for cx in raw_cxs[start:end] if cx is not None]
-        if detections:
-            return float(np.median(detections))
-        # No detections in segment — fall back to previous raw_cxs or center
-        prior = [cx for cx in raw_cxs[:start] if cx is not None]
-        return float(prior[-1]) if prior else default_cx
+    # Convert cut timestamps (seconds) → frame indices, then build (start, end) pairs
+    # e.g. cuts at frames 40 and 90 in a 120-frame clip → [(0,40), (41,90), (91,120)]
+    segment_start_frames = [0] + sorted(int(ct * fps) + 1 for ct in cut_times)
+    segment_start_frames = [s for s in segment_start_frames if 0 <= s < total_frames]
+    segments = list(zip(segment_start_frames, segment_start_frames[1:] + [total_frames]))
 
-    # Assign each frame the static crop x for its segment
-    crop_result: list[int] = [0] * total_frames
-    for seg_start, seg_end in segment_ranges:
-        cam_cx = segment_median_cx(seg_start, seg_end)
-        crop_x = int(cam_cx) - crop_w // 2
-        crop_x = max(0, min(crop_x, src_w - crop_w))
-        for i in range(seg_start, seg_end):
-            crop_result[i] = crop_x
+    def median_face_x_for_segment(frame_start: int, frame_end: int) -> float:
+        """Returns the median detected face center x for the given frame range."""
+        detections_in_segment = [
+            cx for cx in face_center_x_per_frame[frame_start:frame_end] if cx is not None
+        ]
+        if detections_in_segment:
+            return float(np.median(detections_in_segment))
+        # No detections in this segment — use the last known face position, or center
+        prior_detections = [cx for cx in face_center_x_per_frame[:frame_start] if cx is not None]
+        return float(prior_detections[-1]) if prior_detections else fallback_center_x
 
-    return crop_result
+    per_frame_crop_x: list[int] = [0] * total_frames
+
+    for seg_frame_start, seg_frame_end in segments:
+        # The crop window is centered on the median face x for this segment
+        face_center = median_face_x_for_segment(seg_frame_start, seg_frame_end)
+        crop_left_edge = int(face_center) - crop_width // 2
+        # Clamp so the window stays within the source frame boundaries
+        crop_left_edge = max(0, min(crop_left_edge, source_width - crop_width))
+
+        for frame_idx in range(seg_frame_start, seg_frame_end):
+            per_frame_crop_x[frame_idx] = crop_left_edge
+
+    return per_frame_crop_x
 
 
 # Note: cv2.VideoWriter encodes to mp4v here, which then gets re-encoded to libx264
@@ -320,21 +210,29 @@ def _render_frames(
     cap: cv2.VideoCapture,
     start_frame: int,
     total_frames: int,
-    crop_xs: list[int],
-    crop_w: int,
-    tmp_path: str,
+    per_frame_crop_x: list[int],
+    crop_width: int,
+    output_path: str,
     fps: float,
 ) -> None:
+    """
+    Reads each source frame, slices out the crop window, scales it to TARGET_W x TARGET_H,
+    and writes it to a silent mp4. Audio is added separately in _mux_audio.
+    """
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(tmp_path, fourcc, fps, (TARGET_W, TARGET_H))
+    writer = cv2.VideoWriter(output_path, fourcc, fps, (TARGET_W, TARGET_H))
 
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-    for i in range(total_frames):
+    for frame_idx in range(total_frames):
         ret, frame = cap.read()
         if not ret:
             break
-        x = crop_xs[i]
-        cropped = frame[:, x : x + crop_w]
+
+        # Slice the crop window horizontally; keep full height (cropped to 9:16 by scaling)
+        left = per_frame_crop_x[frame_idx]
+        cropped = frame[:, left : left + crop_width]
+
+        # Upscale/downscale to the target 1080x1920 output resolution
         scaled = cv2.resize(cropped, (TARGET_W, TARGET_H), interpolation=cv2.INTER_LANCZOS4)
         writer.write(scaled)
 
@@ -342,15 +240,20 @@ def _render_frames(
 
 
 def _mux_audio(source_video: str, start_time: float, duration: float, silent_mp4: str, output_path: str) -> None:
+    """
+    Takes the silent cropped video and grafts the original audio track back on.
+    Video stream comes from silent_mp4 (already cropped/scaled).
+    Audio stream is extracted from source_video at the matching time range.
+    """
     cmd = [
         _FFMPEG, "-y",
-        "-i", silent_mp4,
-        "-ss", str(start_time), "-t", str(duration), "-i", source_video,
-        "-map", "0:v:0",
-        "-map", "1:a:0",
-        "-c:v", "copy",
+        "-i", silent_mp4,                                        # input 0: cropped silent video
+        "-ss", str(start_time), "-t", str(duration), "-i", source_video,  # input 1: original with audio
+        "-map", "0:v:0",   # use video from input 0
+        "-map", "1:a:0",   # use audio from input 1
+        "-c:v", "copy",    # don't re-encode the video — just copy the stream
         "-c:a", "aac", "-b:a", "128k",
-        "-movflags", "+faststart",
+        "-movflags", "+faststart",  # move metadata to front so the file is streamable
         output_path,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)

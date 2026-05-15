@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createJob, getJob } from "./api";
+import { createJob, createJobFromFile, getJob } from "./api";
 import type { Job } from "./types";
 import { UrlForm } from "./components/UrlForm";
 import { PipelineStatus } from "./components/PipelineStatus";
@@ -45,6 +45,20 @@ export default function App() {
     }
   }
 
+  async function handleFileSubmit(file: File) {
+    setSubmitting(true);
+    setError(null);
+    setJob(null);
+    try {
+      const newJob = await createJobFromFile(file);
+      setJob(newJob);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const isRunning = submitting || (job !== null && !TERMINAL.has(job.status));
 
   if (!session) return <LoginPage />;
@@ -79,7 +93,7 @@ export default function App() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <UrlForm onSubmit={handleSubmit} disabled={isRunning} />
+          <UrlForm onSubmit={handleSubmit} onFileSubmit={handleFileSubmit} disabled={isRunning} />
           {error && <p className="text-red-400 text-sm">{error}</p>}
         </div>
 

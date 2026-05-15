@@ -1,7 +1,10 @@
+import os
 import re
+import shutil
+import tempfile
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -9,7 +12,7 @@ from models import Job, Clip
 from middleware.auth import require_auth
 from services.supabase_client import supabase
 from services.s3 import get_presigned_url
-from services.pipeline import run_pipeline
+from services.pipeline import run_pipeline, run_pipeline_from_file
 
 router = APIRouter()
 
@@ -99,6 +102,42 @@ def create_job(
         raise HTTPException(status_code=500, detail="Failed to create job")
 
     background_tasks.add_task(run_pipeline, job_id, url, _update_job)
+    return JSONResponse(content=jsonable_encoder(_db_job_to_job(response.data[0]), by_alias=True), status_code=201)
+
+
+@router.post("/upload", status_code=201)
+async def upload_job(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    user_id: str = Depends(require_auth),
+) -> Job:
+    if not file.filename or not file.filename.lower().endswith(".mp4"):
+        raise HTTPException(status_code=400, detail="Only .mp4 files are supported")
+
+    job_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    response = (
+        supabase.table("jobs")
+        .insert({
+            "id": job_id,
+            "user_id": user_id,
+            "youtube_url": f"upload:{file.filename}",
+            "status": "queued",
+            "created_at": now,
+            "updated_at": now,
+        })
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=500, detail="Failed to create job")
+
+    temp_dir = tempfile.mkdtemp()
+    file_path = os.path.join(temp_dir, file.filename)
+    with open(file_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    background_tasks.add_task(run_pipeline_from_file, job_id, file_path, temp_dir, _update_job)
     return JSONResponse(content=jsonable_encoder(_db_job_to_job(response.data[0]), by_alias=True), status_code=201)
 
 

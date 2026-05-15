@@ -22,20 +22,29 @@ def detect_clips(transcript: Transcript) -> list[DetectedClip]:
     formatted = _format_timestamped_transcript(transcript)
 
     response = _client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o", # this isnt the expensive part so if u wanna use a better model no problem 
         messages=[
             {
                 "role": "system",
                 "content": (
-                    "You are an expert at identifying viral short-form video clips for TikTok, "
-                    "Instagram Reels, and YouTube Shorts.\n\n"
-                    "Given a word-timestamped transcript, find the 3-5 best clips. Each clip must:\n"
-                    "- Be 30–90 seconds long\n"
-                    "- Start and end at a natural sentence boundary (never mid-word or mid-sentence)\n"
-                    "- Be self-contained — the viewer needs no context outside the clip\n"
-                    "- Have a strong hook in the first 3 seconds\n"
-                    "- Be engaging: funny, insightful, emotional, or surprising\n\n"
-                    "Use the timestamps in the transcript to set precise startTime and endTime values in seconds."
+                    "You are an expert viral content editor for TikTok, Instagram Reels, and YouTube Shorts.\n\n"
+                    "Identify the best clips from this transcript. Return between 1 and 5 clips — only include "
+                    "a clip if it would genuinely perform well as a standalone short-form video. Do NOT pad to "
+                    "hit a number. It is better to return 1 great clip than 3 mediocre ones.\n\n"
+                    "Each clip must:\n"
+                    "- Be 15–90 seconds long (can exceed 90s if the content genuinely earns it — never pad)\n"
+                    "- Start and end at a natural sentence boundary\n"
+                    "- Be completely self-contained — no outside context needed\n"
+                    "- Open with a strong hook: a bold claim, surprising fact, question, or emotional moment\n"
+                    "- Have a clear payoff: insight, punchline, resolution, or revelation\n\n"
+                    "Virality signals to look for:\n"
+                    "- Counterintuitive or surprising statements\n"
+                    "- Strong emotion (excitement, fear, inspiration, humor)\n"
+                    "- Quotable one-liners or memorable phrases\n"
+                    "- A story with a clear arc within the clip\n"
+                    "- Practical advice that feels immediately useful\n\n"
+                    "Score each clip 1–10 for virality potential. Only return clips you would score 6 or above.\n\n"
+                    "Use the timestamps to set precise startTime and endTime in seconds."
                 ),
             },
             {
@@ -61,8 +70,14 @@ def detect_clips(transcript: Transcript) -> list[DetectedClip]:
                                         "title": {"type": "string", "description": "Short, catchy title for the clip"},
                                         "startTime": {"type": "number", "description": "Clip start time in seconds"},
                                         "endTime": {"type": "number", "description": "Clip end time in seconds"},
+                                        "viralityScore": {
+                                            "type": "integer",
+                                            "description": "Virality potential 1–10. Only include clips scored 6 or above.",
+                                            "minimum": 1,
+                                            "maximum": 10,
+                                        },
                                     },
-                                    "required": ["title", "startTime", "endTime"],
+                                    "required": ["title", "startTime", "endTime", "viralityScore"],
                                     "additionalProperties": False,
                                 },
                             }
@@ -88,4 +103,5 @@ def detect_clips(transcript: Transcript) -> list[DetectedClip]:
             end_time=c["endTime"],
         )
         for c in data["clips"]
+        if c.get("viralityScore", 10) >= 6
     ]

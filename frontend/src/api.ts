@@ -36,6 +36,23 @@ export async function getJob(id: string): Promise<Job> {
   return res.json();
 }
 
+export async function createJobFromFile(file: File): Promise<Job> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/jobs/upload`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? "Failed to create job");
+  }
+  return res.json();
+}
+
 export async function createCheckoutSession(email: string): Promise<string> {
   const res = await fetch(`${BASE}/stripe/create-checkout-session`, {
     method: "POST",

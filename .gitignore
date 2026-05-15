@@ -1,4 +1,5 @@
 .env
+.vscode/
 /backend/node_modules
 /backend/coverage
 /frontend/coverage
