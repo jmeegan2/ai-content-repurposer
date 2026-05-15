@@ -36,6 +36,14 @@ export async function getJob(id: string): Promise<Job> {
   return res.json();
 }
 
+export async function getJobs(): Promise<Job[]> {
+  const res = await fetch(`${BASE}/jobs`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch jobs");
+  return res.json();
+}
+
 export async function createJobFromFile(file: File): Promise<Job> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -62,4 +70,37 @@ export async function createCheckoutSession(email: string): Promise<string> {
   if (!res.ok) throw new Error("Failed to create checkout session");
   const data = (await res.json()) as { url: string };
   return data.url;
+}
+
+export async function getYoutubeStatus(): Promise<{ connected: boolean }> {
+  const res = await fetch(`${BASE}/auth/youtube/status`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) return { connected: false };
+  return res.json();
+}
+
+export async function getYoutubeAuthUrl(): Promise<string> {
+  const res = await fetch(`${BASE}/auth/youtube/url`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to get YouTube auth URL");
+  const data = (await res.json()) as { url: string };
+  return data.url;
+}
+
+export async function uploadClipToYoutube(
+  clipId: string,
+  title: string,
+  description = "",
+): Promise<void> {
+  const res = await fetch(`${BASE}/clips/${clipId}/upload-youtube`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify({ title, description }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? "Failed to start YouTube upload");
+  }
 }

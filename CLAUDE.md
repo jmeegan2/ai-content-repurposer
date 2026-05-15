@@ -84,3 +84,4 @@ STRIPE_PRICE_ID=
 ## Things to keep in mind
 
 - I always want you to use the commit command in the .claude folder when doing commits
+- when u create a new plan local md file go ahead and place it in the 'plans' folder

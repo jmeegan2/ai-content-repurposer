@@ -24,6 +24,9 @@ class Transcript(AppModel):
     words: list[WordTimestamp]
 
 
+YoutubeUploadStatus = Literal["pending", "uploaded", "failed"]
+
+
 class Clip(AppModel):
     id: str
     start_time: float
@@ -33,6 +36,8 @@ class Clip(AppModel):
     thumbnail_key: Optional[str] = None
     s3_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
+    youtube_video_id: Optional[str] = None
+    youtube_upload_status: Optional[YoutubeUploadStatus] = None
 
 
 class Job(AppModel):

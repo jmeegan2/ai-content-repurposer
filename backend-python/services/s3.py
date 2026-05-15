@@ -28,3 +28,8 @@ def get_presigned_url(key: str, expires_in: int = 3600, filename: str | None = N
 
 def delete_file(key: str) -> None:
     _s3.delete_object(Bucket=_BUCKET, Key=key)
+
+
+def get_object_stream(key: str):
+    response = _s3.get_object(Bucket=_BUCKET, Key=key)
+    return response["Body"]

@@ -29,6 +29,8 @@ def _db_clip_to_clip(row: dict) -> Clip:
         title=row["title"],
         s3_key=row["s3_key"],
         thumbnail_key=row.get("thumbnail_key"),
+        youtube_video_id=row.get("youtube_video_id"),
+        youtube_upload_status=row.get("youtube_upload_status"),
     )
 
 
@@ -179,4 +181,30 @@ def list_jobs(user_id: str = Depends(require_auth)) -> list[Job]:
     )
     if response.data is None:
         raise HTTPException(status_code=500, detail="Failed to fetch jobs")
-    return JSONResponse(content=jsonable_encoder([_db_job_to_job(row) for row in response.data], by_alias=True))
+
+    job_rows = response.data
+    done_job_ids = [j["id"] for j in job_rows if j["status"] == "done"]
+
+    clips_by_job: dict[str, list[Clip]] = {}
+    if done_job_ids:
+        clips_resp = (
+            supabase.table("clips")
+            .select("*")
+            .in_("job_id", done_job_ids)
+            .execute()
+        )
+        for row in clips_resp.data or []:
+            clip = _db_clip_to_clip(row)
+            if clip.s3_key:
+                safe_title = re.sub(r"[^\w\s-]", "", re.sub(r"[^\x00-\x7F]", "", clip.title)).strip()
+                clip.s3_url = get_presigned_url(clip.s3_key, 3600, f"{safe_title}.mp4")
+            if clip.thumbnail_key:
+                clip.thumbnail_url = get_presigned_url(clip.thumbnail_key)
+            clips_by_job.setdefault(row["job_id"], []).append(clip)
+
+    return JSONResponse(
+        content=jsonable_encoder(
+            [_db_job_to_job(row, clips_by_job.get(row["id"], [])) for row in job_rows],
+            by_alias=True,
+        )
+    )
