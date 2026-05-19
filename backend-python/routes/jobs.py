@@ -160,7 +160,7 @@ def cancel_job(job_id: str, user_id: str = Depends(require_auth)):
 
 
 @router.get("/{job_id}")
-async def get_job(job_id: str, user_id: str = Depends(require_auth)) -> Job:
+def get_job(job_id: str, user_id: str = Depends(require_auth)) -> Job:
     job_resp = (
         supabase.table("jobs")
         .select("*")
