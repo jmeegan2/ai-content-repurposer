@@ -1,24 +1,20 @@
-import os
+import logging
 import re
-import shutil
-import tempfile
+
+logger = logging.getLogger(__name__)
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from models import Job, Clip
 from middleware.auth import require_auth
 from services.supabase_client import supabase
-from services.s3 import get_presigned_url
-from services.pipeline import run_pipeline, run_pipeline_from_file
+from services.s3 import get_presigned_url, generate_presigned_upload_url
+import modal
 
 router = APIRouter()
-
-
-class CreateJobRequest(BaseModel):
-    youtubeUrl: str
 
 
 def _db_clip_to_clip(row: dict) -> Clip:
@@ -74,73 +70,81 @@ def _update_job(job_id: str, patch: dict) -> None:
         supabase.table("clips").upsert(clip_rows, on_conflict="id").execute()
 
 
-@router.post("/", status_code=201)
-def create_job(
-    body: CreateJobRequest,
-    background_tasks: BackgroundTasks,
+class UploadUrlRequest(BaseModel):
+    filename: str
+
+
+class UploadCompleteRequest(BaseModel):
+    job_id: str
+    s3_key: str
+
+
+@router.post("/upload-url", status_code=201)
+def request_upload_url(
+    body: UploadUrlRequest,
     user_id: str = Depends(require_auth),
-) -> Job:
-    url = body.youtubeUrl
-    if not url or ("youtube.com" not in url and "youtu.be" not in url):
-        raise HTTPException(status_code=400, detail="Valid YouTube URL required")
-
-    job_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
-
-    response = (
-        supabase.table("jobs")
-        .insert({
-            "id": job_id,
-            "user_id": user_id,
-            "youtube_url": url,
-            "status": "queued",
-            "created_at": now,
-            "updated_at": now,
-        })
-        .execute()
-    )
-
-    if not response.data:
-        raise HTTPException(status_code=500, detail="Failed to create job")
-
-    background_tasks.add_task(run_pipeline, job_id, url, _update_job)
-    return JSONResponse(content=jsonable_encoder(_db_job_to_job(response.data[0]), by_alias=True), status_code=201)
-
-
-@router.post("/upload", status_code=201)
-async def upload_job(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    user_id: str = Depends(require_auth),
-) -> Job:
-    if not file.filename or not file.filename.lower().endswith(".mp4"):
+):
+    if not body.filename.lower().endswith(".mp4"):
         raise HTTPException(status_code=400, detail="Only .mp4 files are supported")
 
     job_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    s3_key = f"raw/{job_id}/{body.filename}"
 
-    response = (
-        supabase.table("jobs")
-        .insert({
-            "id": job_id,
-            "user_id": user_id,
-            "youtube_url": f"upload:{file.filename}",
-            "status": "queued",
-            "created_at": now,
-            "updated_at": now,
-        })
-        .execute()
-    )
+    try:
+        response = (
+            supabase.table("jobs")
+            .insert({
+                "id": job_id,
+                "user_id": user_id,
+                "youtube_url": f"upload:{body.filename}",
+                "status": "queued",
+                "created_at": now,
+                "updated_at": now,
+            })
+            .execute()
+        )
+    except Exception as e:
+        if "one_active_job_per_user" in str(e):
+            raise HTTPException(status_code=409, detail="You already have a job processing")
+        raise
+
     if not response.data:
         raise HTTPException(status_code=500, detail="Failed to create job")
 
-    temp_dir = tempfile.mkdtemp()
-    file_path = os.path.join(temp_dir, file.filename)
-    with open(file_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    upload_url = generate_presigned_upload_url(s3_key)
+    logger.info(f"[{job_id}] upload-url issued (user={user_id})")
+    return {"job_id": job_id, "upload_url": upload_url, "s3_key": s3_key}
 
-    background_tasks.add_task(run_pipeline_from_file, job_id, file_path, temp_dir, _update_job)
-    return JSONResponse(content=jsonable_encoder(_db_job_to_job(response.data[0]), by_alias=True), status_code=201)
+
+@router.post("/upload-complete")
+def complete_upload(
+    body: UploadCompleteRequest,
+    user_id: str = Depends(require_auth),
+) -> Job:
+    job_resp = (
+        supabase.table("jobs")
+        .select("*")
+        .eq("id", body.job_id)
+        .eq("user_id", user_id)
+        .single()
+        .execute()
+    )
+    if not job_resp.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job_resp.data["status"] != "queued":
+        raise HTTPException(status_code=409, detail="Job is not in queued state")
+
+    try:
+        modal_fn = modal.Function.from_name("ai-repurposer", "run_pipeline_from_s3_modal")
+        modal_fn.spawn(body.job_id, body.s3_key, user_id)
+        logger.info(f"[{body.job_id}] spawned on Modal (file upload)")
+    except Exception as e:
+        logger.error(f"[{body.job_id}] Modal spawn failed — {e}")
+        supabase.table("jobs").update({"status": "failed", "error": str(e)}).eq("id", body.job_id).execute()
+        raise HTTPException(status_code=500, detail=f"Failed to start pipeline: {e}")
+
+    return JSONResponse(content=jsonable_encoder(_db_job_to_job(job_resp.data), by_alias=True))
 
 
 @router.get("/{job_id}")

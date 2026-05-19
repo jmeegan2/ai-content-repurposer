@@ -8,7 +8,7 @@ vi.mock("./lib/supabase", () => ({
   },
 }));
 
-import { createJob, getJob } from "./api";
+import { getJob } from "./api";
 
 const mockJob = {
   id: "job-1",
@@ -21,33 +21,6 @@ const mockJob = {
 
 beforeEach(() => {
   vi.restoreAllMocks();
-});
-
-describe("createJob", () => {
-  it("posts youtube url and returns job", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response(JSON.stringify(mockJob), { status: 201 }),
-    );
-
-    const result = await createJob("https://youtube.com/watch?v=abc");
-
-    expect(fetch).toHaveBeenCalledWith(
-      "http://localhost:3001/jobs",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ youtubeUrl: "https://youtube.com/watch?v=abc" }),
-      }),
-    );
-    expect(result).toEqual(mockJob);
-  });
-
-  it("throws with server error message on failure", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: "Invalid URL" }), { status: 400 }),
-    );
-
-    await expect(createJob("bad-url")).rejects.toThrow("Invalid URL");
-  });
 });
 
 describe("getJob", () => {
