@@ -5,7 +5,8 @@ export type JobStatus =
   | "detecting"
   | "processing"
   | "done"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 export interface Clip {
   id: string;

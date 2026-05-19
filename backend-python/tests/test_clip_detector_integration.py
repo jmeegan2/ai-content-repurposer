@@ -155,4 +155,4 @@ def test_detect_clips_returns_valid_clips():
         assert clip.end_time > clip.start_time
         duration = clip.end_time - clip.start_time
         assert duration >= 20, f"Clip too short: {duration}s"
-        assert duration <= 110, f"Clip too long: {duration}s"
+        assert duration <= 75, f"Clip too long: {duration}s"

@@ -9,7 +9,7 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-_FFMPEG = os.environ.get("FFMPEG_PATH", "ffmpeg")
+from services.ffmpeg import FFMPEG, run_ffmpeg
 
 
 def _ensure_h264(file_path: str, temp_dir: str) -> str:
@@ -30,18 +30,16 @@ def _ensure_h264(file_path: str, temp_dir: str) -> str:
     logger.info(f"video codec is {codec!r} — transcoding to H.264 1080p for OpenCV compatibility")
     base = os.path.splitext(os.path.basename(file_path))[0]
     out_path = os.path.join(temp_dir, f"{base}-h264.mp4")
-    r = subprocess.run(
+    run_ffmpeg(
         [
-            _FFMPEG, "-y", "-i", file_path,
+            FFMPEG, "-y", "-i", file_path,
             "-c:v", "libx264", "-preset", "fast", "-crf", "18",
             "-vf", "scale=-2:min(ih\\,1080)",
             "-c:a", "copy",
             out_path,
         ],
-        capture_output=True, text=True,
+        "H.264 transcode failed",
     )
-    if r.returncode != 0:
-        raise RuntimeError(f"H.264 transcode failed:\n{r.stderr}")
     return out_path
 
 from models import Clip
@@ -74,21 +72,13 @@ def _process_and_upload_clip(
     return clip
 
 
-def run_pipeline_from_file(job_id: str, file_path: str, temp_dir: str, update_job: UpdateJobFn) -> None:
-    """Same as run_pipeline but skips the download step — file is already on disk."""
+def run_pipeline_from_file(job_id: str, file_path: str, temp_dir: str, update_job: UpdateJobFn, raw_s3_key: str | None = None) -> None:
+    """File is already on disk (downloaded from S3 by Modal). Raw S3 object is deleted in finally; lifecycle rule is the fallback if Modal crashes."""
     t_start = time.time()
     def elapsed() -> str:
         return f"{time.time() - t_start:.1f}s"
-    file_name = os.path.basename(file_path)
-    raw_s3_key = f"raw/{job_id}/{file_name}"
-    raw_uploaded = False
     try:
-        logger.info(f"[{job_id}] pipeline start (file upload)")
-
-        t = time.time()
-        upload_file(raw_s3_key, file_path)
-        raw_uploaded = True
-        logger.info(f"[{job_id}] raw upload done ({time.time() - t:.1f}s)")
+        logger.info(f"[{job_id}] pipeline start")
 
         t = time.time()
         file_path = _ensure_h264(file_path, temp_dir)
@@ -137,7 +127,7 @@ def run_pipeline_from_file(job_id: str, file_path: str, temp_dir: str, update_jo
         logger.error(f"[{job_id}] pipeline failed at {elapsed()} — {exc}")
         update_job(job_id, {"status": "failed", "error": str(exc)})
     finally:
-        if raw_uploaded:
+        if raw_s3_key:
             delete_file(raw_s3_key)
             logger.info(f"[{job_id}] raw video deleted from S3")
         if temp_dir and os.path.exists(temp_dir):

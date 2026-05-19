@@ -1,9 +1,7 @@
 import os
-import subprocess
 from models import Clip, WordTimestamp
 from services import autoframe
-
-_FFMPEG = os.environ.get("FFMPEG_PATH", "/opt/homebrew/bin/ffmpeg")
+from services.ffmpeg import FFMPEG, run_ffmpeg
 _WORDS_PER_CAPTION = 4
 
 
@@ -55,9 +53,9 @@ def process_clip(
     # Pass 2: burn subtitles onto tracked video
     # Commas inside force_style must be escaped with \, so ffmpeg doesn't treat them as filter separators
     subtitle_style = r"FontName=Arial\,FontSize=22\,PrimaryColour=&H00FFFFFF\,OutlineColour=&H00000000\,Outline=2\,Alignment=2\,MarginV=80"
-    result = subprocess.run(
+    run_ffmpeg(
         [
-            _FFMPEG, "-y",
+            FFMPEG, "-y",
             "-i", tracked_path,
             "-vf", f"subtitles={srt_path}:force_style={subtitle_style}",
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
@@ -65,29 +63,23 @@ def process_clip(
             "-movflags", "+faststart",
             clip_path,
         ],
-        capture_output=True,
-        text=True,
+        "ffmpeg subtitle burn failed",
     )
-    if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg subtitle burn failed:\n{result.stderr}")
 
     # Clean up intermediate tracked file
     if os.path.exists(tracked_path):
         os.unlink(tracked_path)
 
     # Thumbnail: grab frame at clip midpoint
-    result = subprocess.run(
+    run_ffmpeg(
         [
-            _FFMPEG, "-y",
+            FFMPEG, "-y",
             "-ss", str(duration / 2),
             "-i", clip_path,
             "-frames:v", "1",
             thumbnail_path,
         ],
-        capture_output=True,
-        text=True,
+        "ffmpeg thumbnail failed",
     )
-    if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg thumbnail failed:\n{result.stderr}")
 
     return clip_path, thumbnail_path

@@ -7,6 +7,8 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
+from services.ffmpeg import FFMPEG, run_ffmpeg
+
 # Output dimensions for 9:16 vertical video (TikTok / Reels / Shorts)
 TARGET_W = 1080
 TARGET_H = 1920
@@ -14,8 +16,6 @@ TARGET_H = 1920
 # If the face jumps more than 40% of the source width between frames, treat it as a
 # hard scene cut rather than movement — avoids the camera chasing a false detection.
 SNAP_THRESHOLD = 0.40
-
-_FFMPEG = os.environ.get("FFMPEG_PATH", "/opt/homebrew/bin/ffmpeg")
 
 
 def process_clip(input_path: str, start_time: float, end_time: float, output_path: str) -> None:
@@ -74,7 +74,7 @@ def _detect_cuts(input_path: str, start_time: float, duration: float, threshold:
     """
     result = subprocess.run(
         [
-            _FFMPEG,
+            FFMPEG,
             "-ss", str(start_time),
             "-t", str(duration),
             "-i", input_path,
@@ -245,17 +245,17 @@ def _mux_audio(source_video: str, start_time: float, duration: float, silent_mp4
     Video stream comes from silent_mp4 (already cropped/scaled).
     Audio stream is extracted from source_video at the matching time range.
     """
-    cmd = [
-        _FFMPEG, "-y",
-        "-i", silent_mp4,                                        # input 0: cropped silent video
-        "-ss", str(start_time), "-t", str(duration), "-i", source_video,  # input 1: original with audio
-        "-map", "0:v:0",   # use video from input 0
-        "-map", "1:a:0",   # use audio from input 1
-        "-c:v", "copy",    # don't re-encode the video — just copy the stream
-        "-c:a", "aac", "-b:a", "128k",
-        "-movflags", "+faststart",  # move metadata to front so the file is streamable
-        output_path,
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg audio mux failed:\n{result.stderr}")
+    run_ffmpeg(
+        [
+            FFMPEG, "-y",
+            "-i", silent_mp4,                                        # input 0: cropped silent video
+            "-ss", str(start_time), "-t", str(duration), "-i", source_video,  # input 1: original with audio
+            "-map", "0:v:0",   # use video from input 0
+            "-map", "1:a:0",   # use audio from input 1
+            "-c:v", "copy",    # don't re-encode the video — just copy the stream
+            "-c:a", "aac", "-b:a", "128k",
+            "-movflags", "+faststart",  # move metadata to front so the file is streamable
+            output_path,
+        ],
+        "ffmpeg audio mux failed",
+    )

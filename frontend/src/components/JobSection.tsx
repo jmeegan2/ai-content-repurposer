@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Job } from "../types";
 import { ClipCard } from "./ClipCard";
 import { PipelineStatus } from "./PipelineStatus";
@@ -5,11 +6,13 @@ import { PipelineStatus } from "./PipelineStatus";
 interface Props {
   job: Job;
   onJobUpdate: (job: Job) => void;
+  onCancel: (jobId: string) => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
   done: "Done",
   failed: "Failed",
+  cancelled: "Cancelled",
   queued: "Queued",
   downloading: "Downloading",
   transcribing: "Transcribing",
@@ -20,7 +23,10 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   done: "bg-emerald-500/15 text-emerald-400",
   failed: "bg-red-500/15 text-red-400",
+  cancelled: "bg-zinc-700/40 text-zinc-500",
 };
+
+const TERMINAL = new Set(["done", "failed", "cancelled"]);
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -33,9 +39,20 @@ function timeAgo(iso: string): string {
   return `${days}d ago`;
 }
 
-export function JobSection({ job, onJobUpdate }: Props) {
+export function JobSection({ job, onJobUpdate, onCancel }: Props) {
+  const [cancelling, setCancelling] = useState(false);
   const colorClass =
     STATUS_COLOR[job.status] ?? "bg-zinc-700/40 text-zinc-400";
+  const isActive = !TERMINAL.has(job.status);
+
+  async function handleCancel() {
+    setCancelling(true);
+    try {
+      await onCancel(job.id);
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -44,13 +61,22 @@ export function JobSection({ job, onJobUpdate }: Props) {
         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colorClass}`}>
           {STATUS_LABEL[job.status] ?? job.status}
         </span>
+        {isActive && (
+          <button
+            onClick={handleCancel}
+            disabled={cancelling}
+            className="text-xs text-zinc-600 hover:text-zinc-400 disabled:opacity-50 transition-colors"
+          >
+            {cancelling ? "Cancelling…" : "Cancel"}
+          </button>
+        )}
       </div>
 
-      {job.status !== "done" && job.status !== "failed" && (
+      {isActive && (
         <PipelineStatus status={job.status} error={job.error} />
       )}
 
-      {job.status === "failed" && job.error && (
+      {(job.status === "failed" || job.status === "cancelled") && job.error && (
         <p className="text-red-400 text-sm">{job.error}</p>
       )}
 

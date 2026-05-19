@@ -19,7 +19,17 @@ def upload_file(key: str, file_path: str, content_type: str = "video/mp4") -> st
     return key
 
 
+def generate_presigned_upload_url(key: str, content_type: str = "video/mp4", expires_in: int = 3600) -> str:
+    # PUT URL — client uploads a file directly to S3 (write)
+    return _s3.generate_presigned_url(
+        "put_object",
+        Params={"Bucket": _BUCKET, "Key": key, "ContentType": content_type},
+        ExpiresIn=expires_in,
+    )
+
+
 def get_presigned_url(key: str, expires_in: int = 3600, filename: str | None = None) -> str:
+    # GET URL — client downloads/streams a file from S3 (read)
     params: dict = {"Bucket": _BUCKET, "Key": key}
     if filename:
         params["ResponseContentDisposition"] = f'attachment; filename="{filename}"'

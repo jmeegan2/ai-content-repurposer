@@ -85,3 +85,57 @@ STRIPE_PRICE_ID=
 
 - I always want you to use the commit command in the .claude folder when doing commits
 - when u create a new plan local md file go ahead and place it in the 'plans' folder
+- always use the grill-me skill when starting a new plan
+- use python3
+
+
+
+
+current table layout: "
+
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.clips (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  job_id uuid NOT NULL,
+  start_time numeric NOT NULL,
+  end_time numeric NOT NULL,
+  title text NOT NULL,
+  s3_key text NOT NULL,
+  thumbnail_key text,
+  youtube_video_id text,
+  youtube_upload_status text,
+  CONSTRAINT clips_pkey PRIMARY KEY (id),
+  CONSTRAINT clips_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.jobs(id)
+);
+CREATE TABLE public.jobs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  youtube_url text NOT NULL,
+  status text NOT NULL DEFAULT 'queued'::text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  transcript jsonb,
+  error text,
+  CONSTRAINT jobs_pkey PRIMARY KEY (id),
+  CONSTRAINT jobs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  stripe_customer_id text,
+  subscription_status text NOT NULL DEFAULT 'inactive'::text,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  credits_remaining integer NOT NULL DEFAULT 150,
+  credits_used integer NOT NULL DEFAULT 0,
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.youtube_tokens (
+  user_id uuid NOT NULL,
+  access_token text NOT NULL,
+  refresh_token text NOT NULL,
+  token_expiry timestamp with time zone NOT NULL,
+  CONSTRAINT youtube_tokens_pkey PRIMARY KEY (user_id),
+  CONSTRAINT youtube_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);" 

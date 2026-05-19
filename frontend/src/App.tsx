@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createJob, createJobFromFile, getJob, getJobs } from "./api";
+import { requestUploadUrl, uploadToS3, completeUpload, getJob, getJobs, cancelJob } from "./api";
 import type { Job } from "./types";
 import { UrlForm } from "./components/UrlForm";
 import { JobSection } from "./components/JobSection";
@@ -8,7 +8,7 @@ import { PricingPage } from "./components/PricingPage";
 import { useSession } from "./lib/auth";
 import { supabase } from "./lib/supabase";
 
-const TERMINAL = new Set(["done", "failed"]);
+const TERMINAL = new Set(["done", "failed", "cancelled"]);
 
 function isActive(job: Job) {
   return (
@@ -35,6 +35,8 @@ export default function App() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [abortUpload, setAbortUpload] = useState<(() => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"dashboard" | "pricing">("dashboard");
 
@@ -69,27 +71,36 @@ export default function App() {
     setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
   }
 
-  async function handleSubmit(url: string) {
-    setSubmitting(true);
-    setError(null);
+  async function handleCancel(jobId: string) {
     try {
-      const newJob = await createJob(url);
-      setJobs((prev) => [newJob, ...prev]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setSubmitting(false);
-    }
+      await cancelJob(jobId);
+      setJobs((prev) =>
+        prev.map((j) => (j.id === jobId ? { ...j, status: "cancelled" } : j))
+      );
+    } catch {}
   }
 
   async function handleFileSubmit(file: File) {
     setSubmitting(true);
     setError(null);
+    setUploadProgress(0);
+    let jobId: string | null = null;
     try {
-      const newJob = await createJobFromFile(file);
+      const { job_id, upload_url, s3_key } = await requestUploadUrl(file.name);
+      jobId = job_id;
+      const { promise, abort } = uploadToS3(upload_url, file, setUploadProgress);
+      setAbortUpload(() => abort);
+      await promise;
+      setAbortUpload(null);
+      setUploadProgress(null);
+      const newJob = await completeUpload(job_id, s3_key);
       setJobs((prev) => [newJob, ...prev]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      const aborted = err instanceof Error && err.message === "upload_aborted";
+      if (aborted && jobId) await cancelJob(jobId).catch(() => {});
+      if (!aborted) setError(err instanceof Error ? err.message : "Something went wrong");
+      setAbortUpload(null);
+      setUploadProgress(null);
     } finally {
       setSubmitting(false);
     }
@@ -107,7 +118,7 @@ export default function App() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">AI Repurposer</h1>
             <p className="text-zinc-500 text-sm mt-1">
-              Paste a YouTube URL. Get 9:16 clips with captions.
+              Upload an MP4. Get 9:16 clips with captions.
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -127,7 +138,7 @@ export default function App() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <UrlForm onSubmit={handleSubmit} onFileSubmit={handleFileSubmit} disabled={isRunning} />
+          <UrlForm onFileSubmit={handleFileSubmit} disabled={isRunning} uploadProgress={uploadProgress} onCancelUpload={abortUpload ?? undefined} />
           {error && <p className="text-red-400 text-sm">{error}</p>}
         </div>
 
@@ -143,7 +154,7 @@ export default function App() {
         {!loadingJobs && jobs.length > 0 && (
           <div className="flex flex-col gap-12">
             {jobs.map((job) => (
-              <JobSection key={job.id} job={job} onJobUpdate={updateJob} />
+              <JobSection key={job.id} job={job} onJobUpdate={updateJob} onCancel={handleCancel} />
             ))}
           </div>
         )}

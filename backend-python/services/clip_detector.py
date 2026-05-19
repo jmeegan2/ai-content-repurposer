@@ -32,7 +32,7 @@ def detect_clips(transcript: Transcript) -> list[DetectedClip]:
                     "a clip if it would genuinely perform well as a standalone short-form video. Do NOT pad to "
                     "hit a number. It is better to return 1 great clip than 3 mediocre ones.\n\n"
                     "Each clip must:\n"
-                    "- Be 15–90 seconds long (can exceed 90s if the content genuinely earns it — never pad)\n"
+                    "- Be 20–60 seconds long. Hard cap at 75 seconds — no exceptions. Most great clips are 30–45s.\n"
                     "- Start and end at a natural sentence boundary\n"
                     "- Be completely self-contained — no outside context needed\n"
                     "- Open with a strong hook: a bold claim, surprising fact, question, or emotional moment\n"

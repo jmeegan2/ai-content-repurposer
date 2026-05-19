@@ -43,31 +43,15 @@ def _db_job_to_job(row: dict, clips: list[Clip] = []) -> Job:
     )
 
 
-def _update_job(job_id: str, patch: dict) -> None:
-    clips = patch.pop("clips", None)
+_PRESIGNED_URL_TTL = 3600
 
-    db_patch: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
-    for field in ("status", "transcript", "error"):
-        if field in patch:
-            db_patch[field] = patch[field]
 
-    if len(db_patch) > 1:
-        supabase.table("jobs").update(db_patch).eq("id", job_id).execute()
-
-    if clips and any(c.get("s3_key") for c in clips):
-        clip_rows = [
-            {
-                "id": c["id"],
-                "job_id": job_id,
-                "start_time": c["start_time"],
-                "end_time": c["end_time"],
-                "title": c["title"],
-                "s3_key": c["s3_key"],
-                "thumbnail_key": c.get("thumbnail_key"),
-            }
-            for c in clips
-        ]
-        supabase.table("clips").upsert(clip_rows, on_conflict="id").execute()
+def _attach_clip_urls(clip: Clip) -> None:
+    if clip.s3_key:
+        safe_title = re.sub(r"[^\w\s-]", "", re.sub(r"[^\x00-\x7F]", "", clip.title)).strip()
+        clip.s3_url = get_presigned_url(clip.s3_key, _PRESIGNED_URL_TTL, f"{safe_title}.mp4")
+    if clip.thumbnail_key:
+        clip.thumbnail_url = get_presigned_url(clip.thumbnail_key, _PRESIGNED_URL_TTL)
 
 
 class UploadUrlRequest(BaseModel):
@@ -137,14 +121,42 @@ def complete_upload(
 
     try:
         modal_fn = modal.Function.from_name("ai-repurposer", "run_pipeline_from_s3_modal")
-        modal_fn.spawn(body.job_id, body.s3_key, user_id)
-        logger.info(f"[{body.job_id}] spawned on Modal (file upload)")
+        call = modal_fn.spawn(body.job_id, body.s3_key, user_id)
+        supabase.table("jobs").update({"modal_call_id": call.object_id}).eq("id", body.job_id).execute()
+        logger.info(f"[{body.job_id}] spawned on Modal (call={call.object_id})")
     except Exception as e:
         logger.error(f"[{body.job_id}] Modal spawn failed — {e}")
         supabase.table("jobs").update({"status": "failed", "error": str(e)}).eq("id", body.job_id).execute()
         raise HTTPException(status_code=500, detail=f"Failed to start pipeline: {e}")
 
     return JSONResponse(content=jsonable_encoder(_db_job_to_job(job_resp.data), by_alias=True))
+
+
+@router.delete("/{job_id}", status_code=204)
+def cancel_job(job_id: str, user_id: str = Depends(require_auth)):
+    job_resp = (
+        supabase.table("jobs")
+        .select("status, modal_call_id")
+        .eq("id", job_id)
+        .eq("user_id", user_id)
+        .single()
+        .execute()
+    )
+    if not job_resp.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job_resp.data["status"] in ("done", "failed", "cancelled"):
+        raise HTTPException(status_code=409, detail="Job is already in a terminal state")
+
+    call_id = job_resp.data.get("modal_call_id")
+    if call_id:
+        try:
+            modal.FunctionCall.from_id(call_id).cancel()
+            logger.info(f"[{job_id}] Modal call {call_id} cancelled")
+        except Exception as e:
+            logger.warning(f"[{job_id}] Modal cancel failed — {e}")
+
+    supabase.table("jobs").update({"status": "cancelled"}).eq("id", job_id).execute()
+    logger.info(f"[{job_id}] cancelled by user={user_id}")
 
 
 @router.get("/{job_id}")
@@ -165,11 +177,7 @@ async def get_job(job_id: str, user_id: str = Depends(require_auth)) -> Job:
 
     if job_resp.data["status"] == "done" and clips:
         for clip in clips:
-            if clip.s3_key:
-                safe_title = re.sub(r"[^\w\s-]", "", re.sub(r"[^\x00-\x7F]", "", clip.title)).strip()
-                clip.s3_url = get_presigned_url(clip.s3_key, 3600, f"{safe_title}.mp4")
-            if clip.thumbnail_key:
-                clip.thumbnail_url = get_presigned_url(clip.thumbnail_key)
+            _attach_clip_urls(clip)
 
     return JSONResponse(content=jsonable_encoder(_db_job_to_job(job_resp.data, clips), by_alias=True))
 
@@ -199,11 +207,7 @@ def list_jobs(user_id: str = Depends(require_auth)) -> list[Job]:
         )
         for row in clips_resp.data or []:
             clip = _db_clip_to_clip(row)
-            if clip.s3_key:
-                safe_title = re.sub(r"[^\w\s-]", "", re.sub(r"[^\x00-\x7F]", "", clip.title)).strip()
-                clip.s3_url = get_presigned_url(clip.s3_key, 3600, f"{safe_title}.mp4")
-            if clip.thumbnail_key:
-                clip.thumbnail_url = get_presigned_url(clip.thumbnail_key)
+            _attach_clip_urls(clip)
             clips_by_job.setdefault(row["job_id"], []).append(clip)
 
     return JSONResponse(

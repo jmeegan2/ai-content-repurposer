@@ -50,9 +50,10 @@ export function uploadToS3(
   uploadUrl: string,
   file: File,
   onProgress?: (pct: number) => void,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
+): { promise: Promise<void>; abort: () => void } {
+  let xhr: XMLHttpRequest;
+  const promise = new Promise<void>((resolve, reject) => {
+    xhr = new XMLHttpRequest();
     xhr.open("PUT", uploadUrl);
     xhr.setRequestHeader("Content-Type", "video/mp4");
     if (onProgress) {
@@ -62,8 +63,10 @@ export function uploadToS3(
     }
     xhr.onload = () => (xhr.status === 200 ? resolve() : reject(new Error(`S3 upload failed: ${xhr.status}`)));
     xhr.onerror = () => reject(new Error("S3 upload network error"));
+    xhr.onabort = () => reject(new Error("upload_aborted"));
     xhr.send(file);
   });
+  return { promise, abort: () => xhr?.abort() };
 }
 
 export async function completeUpload(jobId: string, s3Key: string): Promise<Job> {
@@ -88,6 +91,18 @@ export async function createCheckoutSession(email: string): Promise<string> {
   if (!res.ok) throw new Error("Failed to create checkout session");
   const data = (await res.json()) as { url: string };
   return data.url;
+}
+
+export async function cancelJob(id: string): Promise<void> {
+  if (!UUID_RE.test(id)) throw new Error("Invalid job ID");
+  const res = await fetch(`${BASE}/jobs/${id}`, {
+    method: "DELETE",
+    headers: await authHeaders(),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(err.detail ?? "Failed to cancel job");
+  }
 }
 
 export async function getYoutubeStatus(): Promise<{ connected: boolean }> {
