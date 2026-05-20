@@ -600,3 +600,36 @@ backend-python/
 - **Median over mean for segment face center** — median is robust to bad MediaPipe detections (frames where the face is partially occluded or misdetected); mean would be pulled toward outliers
 - **Sequential frame reads** — Version B reads all frames in one sequential pass for detection, faster than Version A's random `cap.set(CAP_PROP_POS_FRAMES)` seeks on every keyframe
 - **scdet threshold = 10** — catches hard cuts without false-positiving on normal head movement; lower to 5 if cuts are being missed
+
+---
+
+## 05-20-2026: 07:28 PM
+
+### What was built
+
+- **Credit system** — `services/credits.py` with `get_profile`, `deduct_credits`, `add_credits`, and `reset_monthly_credits`; credits are deducted upfront on job start and refunded automatically if Modal spawn fails
+- **Job credit gate** — `routes/jobs.py` now requires `duration_seconds` in the upload-complete request, computes `ceil(duration / 60)` credits needed, and blocks with a 402 if insufficient
+- **Stripe top-up flow** — `POST /stripe/create-topup-session` creates a one-time $8 Stripe checkout; webhook detects `metadata.type == "topup"` and adds 100 credits on payment
+- **Monthly credit reset** — webhook handles `invoice.payment_succeeded` with `billing_reason == "subscription_cycle"` to reset credits to 150 each renewal; initial subscription activation also triggers a reset
+- **Credits endpoint** — `GET /stripe/credits` returns `credits_remaining`, `credits_used`, and `subscription_status` for the frontend
+- **Stripe products created** — Pro Plan ($9.99/month, `price_1TZJT746lp9n01kzbyxdBfeH`) and Top-up ($8 one-time, `price_1TZJTg46lp9n01kz7oR28yUy`) set up in Stripe test mode
+- **Supabase default updated** — `profiles.credits_remaining` default changed from 150 → 30 so new free-tier signups get the correct allotment
+- **Clip detector upgraded** — switched from `gpt-4o` to `gpt-5.4`
+
+### Decisions made
+
+- **Free tier: 30 credits, one-time** — never refreshes; enough for 2–3 real videos, but leaves users wanting more without giving away the store monthly
+- **Paid tier: $9.99/month, 150 credits** — matches OpusClip's Starter pricing; market-validated price point
+- **Top-up: $8 for 100 credits** — slightly cheaper per-credit than the subscription to reward loyalty without undercutting upgrades
+- **Credits expire at renewal** — unused credits reset to 150 on each billing cycle; no rollover to avoid liability
+- **Deduct on job start, not completion** — prevents job spam and is the industry standard; server-error refunds handle edge cases
+- **Block upfront by duration** — frontend sends `duration_seconds`, backend checks before spawning Modal so users get a clear error before any work is done
+- **$9 vs $15 pricing** — chose $9.99 to undercut OpusClip while building reputation; can raise prices once there are testimonials
+
+### Project structure changes
+
+```
+backend-python/
+└── services/
+    └── credits.py   # new — credit deduction, addition, and monthly reset logic
+```
