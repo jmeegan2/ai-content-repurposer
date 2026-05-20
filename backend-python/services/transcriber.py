@@ -26,6 +26,7 @@ def transcribe_video(video_path: str) -> Transcript:
         with open(audio_path, "rb") as f:
             response = _client.audio.transcriptions.create(
                 file=f,
+                # Cost is $0.006/min
                 model="whisper-1",
                 response_format="verbose_json",
                 timestamp_granularities=["word"],

@@ -5,6 +5,7 @@ from services.supabase_client import supabase
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 _PRICE_ID = os.environ.get("STRIPE_PRICE_ID", "")
+_TOPUP_PRICE_ID = os.environ.get("STRIPE_TOPUP_PRICE_ID", "")
 _FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
 
@@ -42,5 +43,18 @@ def create_portal_session(customer_id: str) -> str:
     session = stripe.billing_portal.Session.create(
         customer=customer_id,
         return_url=f"{_FRONTEND_URL}/",
+    )
+    return session.url
+
+
+def create_topup_checkout_session(customer_id: str, user_id: str) -> str:
+    session = stripe.checkout.Session.create(
+        customer=customer_id,
+        mode="payment",
+        payment_method_types=["card"],
+        line_items=[{"price": _TOPUP_PRICE_ID, "quantity": 1}],
+        success_url=f"{_FRONTEND_URL}/?topup=success",
+        cancel_url=f"{_FRONTEND_URL}/",
+        metadata={"userId": user_id, "type": "topup"},
     )
     return session.url

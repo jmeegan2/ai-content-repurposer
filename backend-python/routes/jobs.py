@@ -1,4 +1,5 @@
 import logging
+import math
 import re
 
 logger = logging.getLogger(__name__)
@@ -12,6 +13,7 @@ from models import Job, Clip
 from middleware.auth import require_auth
 from services.supabase_client import supabase
 from services.s3 import get_presigned_url, generate_presigned_upload_url
+from services.credits import deduct_credits, add_credits
 import modal
 
 router = APIRouter()
@@ -61,6 +63,7 @@ class UploadUrlRequest(BaseModel):
 class UploadCompleteRequest(BaseModel):
     job_id: str
     s3_key: str
+    duration_seconds: int
 
 
 @router.post("/upload-url", status_code=201)
@@ -119,13 +122,17 @@ def complete_upload(
     if job_resp.data["status"] != "queued":
         raise HTTPException(status_code=409, detail="Job is not in queued state")
 
+    credits_needed = math.ceil(body.duration_seconds / 60)
+    deduct_credits(supabase, user_id, credits_needed)
+
     try:
         modal_fn = modal.Function.from_name("ai-repurposer", "run_pipeline_from_s3_modal")
         call = modal_fn.spawn(body.job_id, body.s3_key, user_id)
         supabase.table("jobs").update({"modal_call_id": call.object_id}).eq("id", body.job_id).execute()
-        logger.info(f"[{body.job_id}] spawned on Modal (call={call.object_id})")
+        logger.info(f"[{body.job_id}] spawned on Modal (call={call.object_id}), credits_used={credits_needed}")
     except Exception as e:
         logger.error(f"[{body.job_id}] Modal spawn failed — {e}")
+        add_credits(supabase, user_id, credits_needed)
         supabase.table("jobs").update({"status": "failed", "error": str(e)}).eq("id", body.job_id).execute()
         raise HTTPException(status_code=500, detail=f"Failed to start pipeline: {e}")
 

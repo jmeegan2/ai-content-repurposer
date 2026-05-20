@@ -22,7 +22,7 @@ def detect_clips(transcript: Transcript) -> list[DetectedClip]:
     formatted = _format_timestamped_transcript(transcript)
 
     response = _client.chat.completions.create(
-        model="gpt-4o", # this isnt the expensive part so if u wanna use a better model no problem 
+        model="gpt-5.4", # this isnt the expensive part so if u wanna use a better model no problem 
         messages=[
             {
                 "role": "system",
