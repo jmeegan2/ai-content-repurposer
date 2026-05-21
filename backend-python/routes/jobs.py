@@ -13,7 +13,7 @@ from models import Job, Clip
 from middleware.auth import require_auth
 from services.supabase_client import supabase
 from services.s3 import get_presigned_url, generate_presigned_upload_url
-from services.credits import deduct_credits, add_credits
+from services.credits import deduct_credits, add_credits, refund_job_credits
 import modal
 
 router = APIRouter()
@@ -122,8 +122,9 @@ def complete_upload(
     if job_resp.data["status"] != "queued":
         raise HTTPException(status_code=409, detail="Job is not in queued state")
 
-    credits_needed = math.ceil(body.duration_seconds / 60)
+    credits_needed = math.ceil(body.duration_seconds / 60) # not sure if this is right way of going about it
     deduct_credits(supabase, user_id, credits_needed)
+    supabase.table("jobs").update({"credits_deducted": credits_needed}).eq("id", body.job_id).execute()
 
     try:
         modal_fn = modal.Function.from_name("ai-repurposer", "run_pipeline_from_s3_modal")
@@ -132,7 +133,7 @@ def complete_upload(
         logger.info(f"[{body.job_id}] spawned on Modal (call={call.object_id}), credits_used={credits_needed}")
     except Exception as e:
         logger.error(f"[{body.job_id}] Modal spawn failed — {e}")
-        add_credits(supabase, user_id, credits_needed)
+        refund_job_credits(supabase, body.job_id, user_id)
         supabase.table("jobs").update({"status": "failed", "error": str(e)}).eq("id", body.job_id).execute()
         raise HTTPException(status_code=500, detail=f"Failed to start pipeline: {e}")
 
@@ -162,6 +163,7 @@ def cancel_job(job_id: str, user_id: str = Depends(require_auth)):
         except Exception as e:
             logger.warning(f"[{job_id}] Modal cancel failed — {e}")
 
+    refund_job_credits(supabase, job_id, user_id)
     supabase.table("jobs").update({"status": "cancelled"}).eq("id", job_id).execute()
     logger.info(f"[{job_id}] cancelled by user={user_id}")
 

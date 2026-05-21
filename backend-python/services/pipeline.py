@@ -72,7 +72,7 @@ def _process_and_upload_clip(
     return clip
 
 
-def run_pipeline_from_file(job_id: str, file_path: str, temp_dir: str, update_job: UpdateJobFn, raw_s3_key: str | None = None) -> None:
+def run_pipeline_from_file(job_id: str, file_path: str, temp_dir: str, update_job: UpdateJobFn, raw_s3_key: str | None = None, refund_credits_fn: Callable[[], None] | None = None) -> None:
     """File is already on disk (downloaded from S3 by Modal). Raw S3 object is deleted in finally; lifecycle rule is the fallback if Modal crashes."""
     t_start = time.time()
     def elapsed() -> str:
@@ -105,6 +105,11 @@ def run_pipeline_from_file(job_id: str, file_path: str, temp_dir: str, update_jo
             for dc in detected
         ]
 
+        if not clips:
+            update_job(job_id, {"clips": [], "status": "done"})
+            logger.info(f"[{job_id}] no clips detected — pipeline done — total {elapsed()}")
+            return
+
         update_job(job_id, {"status": "processing"})
         t = time.time()
         workers = min(_CLIP_WORKERS, len(clips))
@@ -126,6 +131,8 @@ def run_pipeline_from_file(job_id: str, file_path: str, temp_dir: str, update_jo
     except Exception as exc:
         logger.error(f"[{job_id}] pipeline failed at {elapsed()} — {exc}")
         update_job(job_id, {"status": "failed", "error": str(exc)})
+        if refund_credits_fn:
+            refund_credits_fn()
     finally:
         if raw_s3_key:
             delete_file(raw_s3_key)

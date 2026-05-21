@@ -29,6 +29,9 @@ async def stripe_webhook(request: Request) -> dict:
 
     now = datetime.now(timezone.utc).isoformat()
 
+    # BUG: no idempotency check — Stripe retries webhooks on timeout/5xx, so this
+    # handler can fire multiple times for the same event, adding credits repeatedly.
+    # Fix: store processed event IDs (event["id"]) in a DB table and skip duplicates.
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         user_id = session.get("metadata", {}).get("userId")
@@ -61,6 +64,8 @@ async def stripe_webhook(request: Request) -> dict:
             "updated_at": now,
         }).eq("stripe_customer_id", customer_id).execute()
 
+    # MISSING: no handler for charge.refunded — if a user gets a monetary refund via
+    # the customer portal or support, their credits are not clawed back.
     elif event["type"] == "customer.subscription.deleted":
         sub = event["data"]["object"]
         customer_id = sub["customer"] if isinstance(sub["customer"], str) else sub["customer"]["id"]

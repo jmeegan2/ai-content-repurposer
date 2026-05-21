@@ -1,76 +1,129 @@
-# AI Content Repurposer
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What this is
 
-Paste a YouTube URL, get back 9:16 vertical clips with burned-in captions ready for TikTok, Reels, and Shorts.
+Upload an MP4, get 9:16 vertical clips with face-tracked framing and burned-in captions, ready for TikTok, Reels, and Shorts.
 
 ## Stack
 
 | Layer            | Choice                                                  |
 | ---------------- | ------------------------------------------------------- |
-| Backend          | Node.js + Express + TypeScript                          |
-| Dev runner       | tsx watch                                               |
-| Video download   | yt-dlp (Homebrew)                                       |
+| Backend          | Python + FastAPI + uvicorn                              |
+| Compute          | Modal (runs the heavy pipeline: transcription, clip processing) |
+| Video processing | ffmpeg + OpenCV + MediaPipe (face tracking)             |
 | Transcription    | OpenAI Whisper API                                      |
-| Clip detection   | OpenAI gpt-5.4-mini                                     |
-| Video processing | ffmpeg (Homebrew)                                       |
+| Clip detection   | OpenAI GPT (tool-calling, `report_clips` function)      |
 | File storage     | AWS S3 (bucket: ai-repurposer-clips, region: us-east-2) |
-| Database         | Supabase Postgres (planned)                             |
-| Auth             | Supabase Auth (planned)                                 |
-| Payments         | Stripe (planned)                                        |
-| Frontend         | React + Vite (not started)                              |
+| Database         | Supabase Postgres                                       |
+| Auth             | Supabase Auth (JWT validated server-side)               |
+| Payments         | Stripe (subscriptions + one-time credit top-ups)        |
+| Frontend         | React + Vite + Tailwind                                 |
 
-## Project structure
+## Commands
 
-```
-/
-├── backend/
-│   ├── src/
-│   │   ├── index.ts           # Express server, CORS, /health
-│   │   ├── types/index.ts     # Job, Clip, JobStatus types
-│   │   ├── routes/jobs.ts     # POST /jobs, GET /jobs/:id, GET /jobs
-│   │   ├── services/s3.ts     # uploadFile, getPresignedUrl, deleteFile
-│   │   └── scripts/
-│   │       └── test-s3.ts     # One-off S3 connection test
-│   ├── .env                   # Never committed
-│   ├── package.json
-│   └── tsconfig.json
-├── CLAUDE.md
-└── DEVLOG.md
-```
-
-## Running the backend
-
+**Backend (Python/FastAPI):**
 ```bash
-cd backend
-npm run dev      # tsx watch — hot reloads on save
+cd backend-python
+uvicorn main:app --reload --port 8000
 ```
 
-## Key decisions
+**Deploy Modal worker:**
+```bash
+cd backend-python
+modal deploy services/modal_runner.py
+```
 
-- **UTC everywhere** — store UTC, convert to user timezone in frontend only
-- **In-memory job store** — Map-based, no DB yet. Lost on restart intentionally until pipeline is proven
-- **S3 for all video files** — not Supabase Storage (not built for large files)
-- **Presigned URLs** — bucket is private, clips served via 1-hour presigned URLs
-- **No BullMQ yet** — pipeline runs as background async, queue added later
-- **No direct upload yet** — YouTube URL only until core flow is validated
+**Frontend:**
+```bash
+cd frontend
+npm run dev        # dev server at localhost:5173
+npm run test       # vitest watch
+npm run test:run   # vitest single run
+```
 
-## Build order
+**Python tests:**
+```bash
+cd backend-python
+python3 -m pytest tests/
+python3 -m pytest tests/test_autoframe.py  # single file
+```
 
-1. yt-dlp download step ✓
-2. Whisper transcription ✓
-3. LLM clip detection ✓
-4. ffmpeg cut + 9:16 crop + caption burn ✓
-5. S3 upload of clips ✓
-6. React + Vite frontend ✓
-7. Supabase DB + auth 
-8. Stripe ← current
+## Architecture
 
-## Environment variables (backend/.env)
+### Pipeline flow
+
+The pipeline runs entirely on Modal, not on the local FastAPI server:
+
+1. **Upload** — Frontend requests a presigned S3 upload URL from `POST /jobs/upload-url`, uploads the file directly to S3, then calls `POST /jobs/upload-complete`.
+2. **Credit deduction** — `upload-complete` deducts credits (1 credit per minute of video) before spawning Modal.
+3. **Modal spawn** — `modal_runner.py:run_pipeline_from_s3_modal` downloads the raw video from S3, then calls `pipeline.py:run_pipeline_from_file`.
+4. **Pipeline stages** (all logged with elapsed times):
+   - H.264 transcode if needed (OpenCV can't decode AV1/VP9)
+   - Whisper transcription → word-level timestamps
+   - GPT clip detection → `DetectedClip` list
+   - Parallel clip processing (up to 4 workers):
+     - `autoframe.py` — face-tracked 9:16 crop via MediaPipe + OpenCV
+     - `clipper.py` — subtitle burn via ffmpeg (SRT burned with `force_style`)
+     - S3 upload of clip + thumbnail
+5. **Status polling** — Frontend polls `GET /jobs/:id` every 2 seconds until terminal state (`done`, `failed`, `cancelled`).
+
+### Autoframe (face tracking)
+
+`services/autoframe.py` is the core video intelligence — **never replace with static crop**:
+- Uses ffmpeg `scdet` to find hard scene cuts within the clip
+- Runs MediaPipe face detection on every frame
+- Per scene segment: takes the **median** face center x (not mean — resistant to bad detections)
+- All frames in a segment get the same static crop x — no panning, hard jump at cuts
+- Falls back to center when no face detected
+
+### Auth
+
+All API routes use `middleware/auth.py:require_auth` as a FastAPI dependency. It validates the Supabase Bearer JWT and returns `user_id`. The frontend stores the session via `@supabase/supabase-js` and passes the access token in `Authorization: Bearer <token>`.
+
+### Credit system
+
+`services/credits.py`:
+- `deduct_credits` — read-then-write (not atomic; known race condition, fix with Postgres RPC)
+- `add_credits` — used for refunds and top-ups
+- `reset_monthly_credits` — resets to 150 on subscription renewal
+
+**Known bugs (not yet fixed):**
+- Credits are not refunded when a job is cancelled or the pipeline fails
+- Stripe webhook has no idempotency check — duplicate events can add credits twice
+- `charge.refunded` webhook event is unhandled
+
+### Stripe
+
+Two routers in `routes/stripe.py`:
+- `webhook_router` — registered first in `main.py` because it needs the raw request body before FastAPI parses JSON
+- `router` — checkout/portal/credits endpoints
+
+Webhook handles: `checkout.session.completed` (new sub or topup), `invoice.payment_succeeded` (renewal), `customer.subscription.updated`, `customer.subscription.deleted`.
+
+### Models
+
+All Pydantic models in `models.py` use `alias_generator=to_camel` — API responses are camelCase, Python internals are snake_case. Frontend types in `frontend/src/types.ts` match the camelCase shape.
+
+### Database
+
+See schema at bottom of this file. Key: jobs have `one_active_job_per_user` constraint (enforced via Postgres). `modal_call_id` is stored on jobs for cancellation.
+
+## Project conventions
+
+- Always use `python3`
+- Always use the `/commit` skill when committing
+- New plan files go in the `plans/` folder as `.local.md` files
+- Always use the `/grill-me` skill before starting a new plan
+- Face tracking (autoframe) is a non-negotiable product requirement — never suggest static crop
+- UTC everywhere in the backend; timezone conversion is a frontend concern
+
+## Environment variables
+
+Copy `.env.sample` to `.env` in `backend-python/`:
 
 ```
-PORT=3001
-FRONTEND_URL=http://localhost:5173
 OPENAI_API_KEY=
 AWS_REGION=us-east-2
 AWS_ACCESS_KEY_ID=
@@ -79,63 +132,52 @@ AWS_S3_BUCKET=ai-repurposer-clips
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_ID=
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+FRONTEND_URL=http://localhost:5173
+FFMPEG_PATH=/opt/homebrew/bin/ffmpeg
+YTDLP_PATH=/opt/homebrew/bin/yt-dlp
 ```
 
-## Things to keep in mind
+Modal secrets are stored in Modal's secret manager under `ai-repurposer-secrets`.
 
-- I always want you to use the commit command in the .claude folder when doing commits
-- when u create a new plan local md file go ahead and place it in the 'plans' folder
-- always use the grill-me skill when starting a new plan
-- use python3
+## Database schema
 
-
-
-
-current table layout: "
-
--- WARNING: This schema is for context only and is not meant to be run.
--- Table order and constraints may not be valid for execution.
-
+```sql
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,  -- matches auth.users.id
+  stripe_customer_id text,
+  subscription_status text NOT NULL DEFAULT 'inactive',
+  credits_remaining integer NOT NULL DEFAULT 150,
+  credits_used integer NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE public.jobs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,  -- FK → auth.users
+  youtube_url text NOT NULL,  -- "upload:<filename>" for direct uploads
+  status text NOT NULL DEFAULT 'queued',  -- queued|downloading|transcribing|detecting|processing|done|failed|cancelled
+  modal_call_id text,
+  transcript jsonb,
+  error text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE public.clips (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  job_id uuid NOT NULL,
+  job_id uuid NOT NULL,  -- FK → jobs
   start_time numeric NOT NULL,
   end_time numeric NOT NULL,
   title text NOT NULL,
   s3_key text NOT NULL,
   thumbnail_key text,
   youtube_video_id text,
-  youtube_upload_status text,
-  CONSTRAINT clips_pkey PRIMARY KEY (id),
-  CONSTRAINT clips_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.jobs(id)
-);
-CREATE TABLE public.jobs (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  youtube_url text NOT NULL,
-  status text NOT NULL DEFAULT 'queued'::text,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  transcript jsonb,
-  error text,
-  CONSTRAINT jobs_pkey PRIMARY KEY (id),
-  CONSTRAINT jobs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
-);
-CREATE TABLE public.profiles (
-  id uuid NOT NULL,
-  stripe_customer_id text,
-  subscription_status text NOT NULL DEFAULT 'inactive'::text,
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  credits_remaining integer NOT NULL DEFAULT 150,
-  credits_used integer NOT NULL DEFAULT 0,
-  CONSTRAINT profiles_pkey PRIMARY KEY (id),
-  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+  youtube_upload_status text  -- pending|uploaded|failed
 );
 CREATE TABLE public.youtube_tokens (
-  user_id uuid NOT NULL,
+  user_id uuid NOT NULL,  -- FK → auth.users
   access_token text NOT NULL,
   refresh_token text NOT NULL,
-  token_expiry timestamp with time zone NOT NULL,
-  CONSTRAINT youtube_tokens_pkey PRIMARY KEY (user_id),
-  CONSTRAINT youtube_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
-);" 
+  token_expiry timestamptz NOT NULL
+);
+```
