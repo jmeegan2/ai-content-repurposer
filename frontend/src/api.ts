@@ -69,11 +69,11 @@ export function uploadToS3(
   return { promise, abort: () => xhr?.abort() };
 }
 
-export async function completeUpload(jobId: string, s3Key: string): Promise<Job> {
+export async function completeUpload(jobId: string, s3Key: string, durationSeconds: number): Promise<Job> {
   const res = await fetch(`${BASE}/jobs/upload-complete`, {
     method: "POST",
     headers: await authHeaders(),
-    body: JSON.stringify({ job_id: jobId, s3_key: s3Key }),
+    body: JSON.stringify({ job_id: jobId, s3_key: s3Key, duration_seconds: durationSeconds }),
   });
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { detail?: string };

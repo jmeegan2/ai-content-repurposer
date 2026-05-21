@@ -43,7 +43,7 @@ def detect_clips(transcript: Transcript) -> list[DetectedClip]:
                     "- Quotable one-liners or memorable phrases\n"
                     "- A story with a clear arc within the clip\n"
                     "- Practical advice that feels immediately useful\n\n"
-                    "Score each clip 1–10 for virality potential. Only return clips you would score 6 or above.\n\n"
+                    "Score each clip 1–10 for virality potential.\n\n"
                     "Use the timestamps to set precise startTime and endTime in seconds."
                 ),
             },
@@ -103,5 +103,5 @@ def detect_clips(transcript: Transcript) -> list[DetectedClip]:
             end_time=c["endTime"],
         )
         for c in data["clips"]
-        if c.get("viralityScore", 10) >= 6
+        # if c.get("viralityScore", 10) >= 6
     ]

@@ -80,20 +80,36 @@ export default function App() {
     } catch {}
   }
 
+  function getVideoDuration(file: File): Promise<number> {
+    return new Promise((resolve) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(video.src);
+        resolve(Math.ceil(video.duration));
+      };
+      video.onerror = () => resolve(0);
+      video.src = URL.createObjectURL(file);
+    });
+  }
+
   async function handleFileSubmit(file: File) {
     setSubmitting(true);
     setError(null);
     setUploadProgress(0);
     let jobId: string | null = null;
     try {
-      const { job_id, upload_url, s3_key } = await requestUploadUrl(file.name);
+      const [{ job_id, upload_url, s3_key }, durationSeconds] = await Promise.all([
+        requestUploadUrl(file.name),
+        getVideoDuration(file),
+      ]);
       jobId = job_id;
       const { promise, abort } = uploadToS3(upload_url, file, setUploadProgress);
       setAbortUpload(() => abort);
       await promise;
       setAbortUpload(null);
       setUploadProgress(null);
-      const newJob = await completeUpload(job_id, s3_key);
+      const newJob = await completeUpload(job_id, s3_key, durationSeconds);
       setJobs((prev) => [newJob, ...prev]);
     } catch (err) {
       const aborted = err instanceof Error && err.message === "upload_aborted";

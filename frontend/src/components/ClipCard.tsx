@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Clip, Job } from "../types";
-import { getYoutubeStatus, uploadClipToYoutube, getJob } from "../api";
+import { getYoutubeStatus, uploadClipToYoutube } from "../api";
 import { ConnectYoutubeModal } from "./ConnectYoutubeModal";
 
 function formatTime(seconds: number): string {
@@ -13,9 +13,10 @@ interface Props {
   clip: Clip;
   jobId: string;
   onJobUpdate: (job: Job) => void;
+  onClipUpdate: (clip: Clip) => void;
 }
 
-export function ClipCard({ clip, jobId, onJobUpdate }: Props) {
+export function ClipCard({ clip, jobId, onJobUpdate, onClipUpdate }: Props) {
   const duration = Math.round(clip.endTime - clip.startTime);
   const [uiState, setUiState] = useState<"idle" | "checking" | "connecting" | "editing">("idle");
   const [title, setTitle] = useState(clip.title);
@@ -39,8 +40,7 @@ export function ClipCard({ clip, jobId, onJobUpdate }: Props) {
     setUploading(true);
     try {
       await uploadClipToYoutube(clip.id, title, description);
-      const updated = await getJob(jobId);
-      onJobUpdate(updated);
+      onClipUpdate({ ...clip, youtubeUploadStatus: "pending" });
       setUiState("idle");
     } catch {
       setUiState("idle");
