@@ -16,6 +16,7 @@ const STATUS_INDEX: Record<JobStatus, number> = {
   processing: 3,
   done: 4,
   failed: -1,
+  cancelled: -1,
 };
 
 interface Props {

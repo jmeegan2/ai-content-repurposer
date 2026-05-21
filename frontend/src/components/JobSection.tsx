@@ -86,8 +86,6 @@ export function JobSection({ job, onJobUpdate, onCancel }: Props) {
             <ClipCard
               key={clip.id}
               clip={clip}
-              jobId={job.id}
-              onJobUpdate={onJobUpdate}
               onClipUpdate={(updated) => onJobUpdate({ ...job, clips: job.clips.map((c) => c.id === updated.id ? updated : c) })}
             />
           ))}

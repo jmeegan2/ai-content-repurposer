@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Clip, Job } from "../types";
+import type { Clip } from "../types";
 import { getYoutubeStatus, uploadClipToYoutube } from "../api";
 import { ConnectYoutubeModal } from "./ConnectYoutubeModal";
 
@@ -11,12 +11,10 @@ function formatTime(seconds: number): string {
 
 interface Props {
   clip: Clip;
-  jobId: string;
-  onJobUpdate: (job: Job) => void;
   onClipUpdate: (clip: Clip) => void;
 }
 
-export function ClipCard({ clip, jobId, onJobUpdate, onClipUpdate }: Props) {
+export function ClipCard({ clip, onClipUpdate }: Props) {
   const duration = Math.round(clip.endTime - clip.startTime);
   const [uiState, setUiState] = useState<"idle" | "checking" | "connecting" | "editing">("idle");
   const [title, setTitle] = useState(clip.title);
