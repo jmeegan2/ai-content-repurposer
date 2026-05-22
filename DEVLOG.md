@@ -527,3 +527,109 @@ frontend/src/
 └── components/
     └── PricingPage.tsx         # New: placeholder pricing page with Pro plan card
 ```
+
+---
+
+## 05-13-2026: 05:11 PM
+
+### What was built
+
+- **Full Python backend rewrite (FastAPI)** — rewrote the entire Node.js/Express backend in Python to natively support face tracking; same routes, same pipeline logic, same services; deployed alongside the Node.js backend on a new `python-backend` branch
+- **`services/autoframe.py`** — MediaPipe BlazeFace face detection every 5 frames, linear interpolation between detections, 30-frame moving average smoothing, deadzone anti-jitter, per-frame crop with OpenCV, ffmpeg audio mux; falls back to center crop when no face detected
+- **`services/clipper.py`** — two-pass render: Pass 1 calls `autoframe.py` for face-tracked 1080×1920 crop (no subtitles), Pass 2 burns SRT subtitles via ffmpeg subprocess; SRT generation ported exactly from Node.js (4 words per caption, timestamp math preserved)
+- **`services/pipeline.py`** — full orchestration port: download → transcribe → detect → process → upload; uses FastAPI `BackgroundTasks` so pipeline runs off the request thread
+- **All services ported** — `s3.py` (boto3), `downloader.py` (yt-dlp subprocess), `transcriber.py` (OpenAI Whisper), `clip_detector.py` (GPT function calling, exact prompts preserved), `stripe_service.py`, `supabase_client.py`
+- **`middleware/auth.py`** — Supabase JWT validation as a FastAPI dependency
+- **Pydantic models with camelCase aliases** — `AppModel` base class uses `alias_generator=to_camel` so API responses match the frontend's expected camelCase shape
+- **Integration tests** — `test_pipeline_integration.py`, `test_clip_detector_integration.py`, `test_transcriber_integration.py`; pipeline test passed end-to-end with clips and thumbnails landing in S3 and presigned URLs confirmed playable
+- **Dockerfile** — Railway-ready; installs ffmpeg, yt-dlp, mediapipe, opencv in a single Python 3.11-slim image
+- **Frontend wired to Python backend** — `api.ts` updated to use `VITE_API_URL ?? "http://localhost:8000"` instead of hardcoded port 3001
+
+### Decisions made
+
+- **Switch to Python over two-service architecture** — video processing (face tracking) requires Python regardless; building a Python FastAPI backend eliminates the Node.js + Python subprocess complexity and gives a single unified stack; pre-deployment is the right moment to make this call
+- **Build our own `autoframe.py` over the open-source clipping tool** — analyzed `NaufalRizqullah/opensource-clipping`; `studio/core.py` is a 500-line monolith with dynamic module loading and 50+ config attributes; not extractable cleanly; building our own face tracking is simpler and gives full control
+- **GPT kept over Gemini** — the open-source tool uses Gemini for clip detection; we preserved OpenAI GPT (same prompts, same tool-use schema) to avoid switching providers mid-build
+- **`alias_generator=to_camel` on Pydantic models** — internal code uses snake_case (Pythonic), API responses serialize with `by_alias=True` to match the frontend's camelCase types without touching the frontend
+- **Two-pass encode (autoframe → subtitle burn)** — OpenCV `VideoWriter` can't write audio, requiring a separate ffmpeg audio mux, then a second ffmpeg pass for subtitles; final output is libx264 at CRF 23; not visibly worse for social media clips since platforms re-encode on upload anyway; `sendcmd` filter approach noted in a comment as the cleaner long-term fix
+
+### Project structure changes
+
+```
+backend-python/
+├── main.py                     # FastAPI app, CORS, route registration
+├── models.py                   # Pydantic models with camelCase aliases
+├── requirements.txt
+├── Dockerfile
+├── .env.sample
+├── middleware/
+│   └── auth.py                 # Supabase JWT FastAPI dependency
+├── routes/
+│   ├── jobs.py                 # POST /jobs, GET /jobs/:id, GET /jobs
+│   └── stripe.py               # Webhook, checkout session, portal session
+├── services/
+│   ├── autoframe.py            # MediaPipe face tracking + OpenCV crop
+│   ├── clipper.py              # SRT generation + two-pass ffmpeg render
+│   ├── pipeline.py             # Pipeline orchestration
+│   ├── downloader.py           # yt-dlp subprocess
+│   ├── transcriber.py          # Whisper API
+│   ├── clip_detector.py        # GPT clip detection
+│   ├── s3.py                   # boto3 upload/presign/delete
+│   ├── stripe_service.py       # Stripe checkout/portal helpers
+│   └── supabase_client.py      # Supabase service role client
+└── tests/
+    ├── test_pipeline_integration.py
+    ├── test_clip_detector_integration.py
+    └── test_transcriber_integration.py
+```
+
+---
+
+## 05-14-2026: 05:12 PM
+
+### What was built
+
+- **Opus-style fixed-crop-per-segment autoframing (Version B)** — rewrote `autoframe.py` to use a static median crop per scene segment instead of continuous face tracking; eliminates panning and jitter entirely
+- **Scene cut detection** — `_detect_cuts` uses ffmpeg's `scdet` filter to find cut boundaries within a clip; segment boundaries are offset by +1 frame so the crop jumps on the first frame of the new scene, not the last frame of the old one
+- **Version A preserved** — original lerp/deadzone/keyframe algorithm kept as `_detect_and_smooth_v1`; `TRACKING_VERSION = "A" | "B"` flag at the top of the file switches between them
+- **`.gitignore` updated** — `backend-python/tests/media for testing/` excluded (large video files, not suitable for git)
+
+### Decisions made
+
+- **Static median crop over Kalman/lerp tracking** — continuous tracking (Kalman filter, lerp) causes the camera to follow every face movement, creating a panning look; Opus Clips uses a fixed crop per shot — detect all faces in the segment, take the median x, lock the crop there for the entire segment; zero movement within a shot, hard jump at cuts
+- **Median over mean for segment face center** — median is robust to bad MediaPipe detections (frames where the face is partially occluded or misdetected); mean would be pulled toward outliers
+- **Sequential frame reads** — Version B reads all frames in one sequential pass for detection, faster than Version A's random `cap.set(CAP_PROP_POS_FRAMES)` seeks on every keyframe
+- **scdet threshold = 10** — catches hard cuts without false-positiving on normal head movement; lower to 5 if cuts are being missed
+
+---
+
+## 05-20-2026: 07:28 PM
+
+### What was built
+
+- **Credit system** — `services/credits.py` with `get_profile`, `deduct_credits`, `add_credits`, and `reset_monthly_credits`; credits are deducted upfront on job start and refunded automatically if Modal spawn fails
+- **Job credit gate** — `routes/jobs.py` now requires `duration_seconds` in the upload-complete request, computes `ceil(duration / 60)` credits needed, and blocks with a 402 if insufficient
+- **Stripe top-up flow** — `POST /stripe/create-topup-session` creates a one-time $8 Stripe checkout; webhook detects `metadata.type == "topup"` and adds 100 credits on payment
+- **Monthly credit reset** — webhook handles `invoice.payment_succeeded` with `billing_reason == "subscription_cycle"` to reset credits to 150 each renewal; initial subscription activation also triggers a reset
+- **Credits endpoint** — `GET /stripe/credits` returns `credits_remaining`, `credits_used`, and `subscription_status` for the frontend
+- **Stripe products created** — Pro Plan ($9.99/month, `price_1TZJT746lp9n01kzbyxdBfeH`) and Top-up ($8 one-time, `price_1TZJTg46lp9n01kz7oR28yUy`) set up in Stripe test mode
+- **Supabase default updated** — `profiles.credits_remaining` default changed from 150 → 30 so new free-tier signups get the correct allotment
+- **Clip detector upgraded** — switched from `gpt-4o` to `gpt-5.4`
+
+### Decisions made
+
+- **Free tier: 30 credits, one-time** — never refreshes; enough for 2–3 real videos, but leaves users wanting more without giving away the store monthly
+- **Paid tier: $9.99/month, 150 credits** — matches OpusClip's Starter pricing; market-validated price point
+- **Top-up: $8 for 100 credits** — slightly cheaper per-credit than the subscription to reward loyalty without undercutting upgrades
+- **Credits expire at renewal** — unused credits reset to 150 on each billing cycle; no rollover to avoid liability
+- **Deduct on job start, not completion** — prevents job spam and is the industry standard; server-error refunds handle edge cases
+- **Block upfront by duration** — frontend sends `duration_seconds`, backend checks before spawning Modal so users get a clear error before any work is done
+- **$9 vs $15 pricing** — chose $9.99 to undercut OpusClip while building reputation; can raise prices once there are testimonials
+
+### Project structure changes
+
+```
+backend-python/
+└── services/
+    └── credits.py   # new — credit deduction, addition, and monthly reset logic
+```

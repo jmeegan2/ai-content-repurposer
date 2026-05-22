@@ -5,7 +5,8 @@ export type JobStatus =
   | "detecting"
   | "processing"
   | "done"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 export interface Clip {
   id: string;
@@ -15,6 +16,8 @@ export interface Clip {
   s3Key: string;
   s3Url?: string;
   thumbnailUrl?: string;
+  youtubeVideoId?: string;
+  youtubeUploadStatus?: "pending" | "uploaded" | "failed";
 }
 
 export interface Job {

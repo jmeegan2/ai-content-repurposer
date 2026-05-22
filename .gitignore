@@ -1,7 +1,19 @@
+.DS_Store
 .env
+.vscode/
 /backend/node_modules
 /backend/coverage
 /frontend/coverage
 .claude/settings.local.json
 .scannerwork
 *.local.md
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Test media
+backend-python/tests/media for testing/

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ClipCard } from "./ClipCard";
 import type { Clip } from "../types";
@@ -11,25 +11,27 @@ const baseClip: Clip = {
   s3Key: "clips/job-1/clip-1.mp4",
 };
 
+const onClipUpdate = vi.fn();
+
 describe("ClipCard", () => {
   it("renders clip title", () => {
-    render(<ClipCard clip={baseClip} />);
+    render(<ClipCard clip={baseClip} onClipUpdate={onClipUpdate} />);
     expect(screen.getByText("The best moment")).toBeInTheDocument();
   });
 
   it("formats and displays time range correctly", () => {
-    render(<ClipCard clip={baseClip} />);
-    expect(screen.getByText(/1:05/)).toBeInTheDocument(); // startTime 65s
-    expect(screen.getByText(/2:05/)).toBeInTheDocument(); // endTime 125s
+    render(<ClipCard clip={baseClip} onClipUpdate={onClipUpdate} />);
+    expect(screen.getByText(/1:05/)).toBeInTheDocument();
+    expect(screen.getByText(/2:05/)).toBeInTheDocument();
   });
 
   it("displays duration in seconds", () => {
-    render(<ClipCard clip={baseClip} />);
+    render(<ClipCard clip={baseClip} onClipUpdate={onClipUpdate} />);
     expect(screen.getByText("60s")).toBeInTheDocument();
   });
 
   it("shows placeholder icon when no thumbnail", () => {
-    render(<ClipCard clip={baseClip} />);
+    render(<ClipCard clip={baseClip} onClipUpdate={onClipUpdate} />);
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 
@@ -37,6 +39,7 @@ describe("ClipCard", () => {
     render(
       <ClipCard
         clip={{ ...baseClip, thumbnailUrl: "https://s3.example.com/thumb.jpg" }}
+        onClipUpdate={onClipUpdate}
       />,
     );
     const img = screen.getByRole("img");
@@ -45,7 +48,7 @@ describe("ClipCard", () => {
   });
 
   it("shows processing state when no s3Url", () => {
-    render(<ClipCard clip={baseClip} />);
+    render(<ClipCard clip={baseClip} onClipUpdate={onClipUpdate} />);
     expect(screen.getByText("Processing...")).toBeInTheDocument();
   });
 
@@ -53,6 +56,7 @@ describe("ClipCard", () => {
     render(
       <ClipCard
         clip={{ ...baseClip, s3Url: "https://s3.example.com/clip.mp4" }}
+        onClipUpdate={onClipUpdate}
       />,
     );
     const link = screen.getByRole("link", { name: /download mp4/i });

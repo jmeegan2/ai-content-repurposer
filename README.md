@@ -12,56 +12,70 @@ The tool downloads the video, transcribes it, asks an LLM to find the most engag
 flowchart TD
     User(["👤 User"])
 
-    subgraph Frontend ["Frontend (React + Vite) — planned"]
+    subgraph Frontend ["Frontend (React + Vite)"]
         UI["Dashboard\nUpload · Job Status · Clip Gallery"]
     end
 
-    subgraph Backend ["Backend (Node.js + Express + TypeScript)"]
-        API["REST API\nPOST /jobs\nGET /jobs/:id"]
-        JobStore["In-Memory Job Store\n(Map → Supabase later)"]
-        Downloader["yt-dlp\nDownload MP4"]
-        Whisper["OpenAI Whisper API\nTimestamped Transcript"]
-        LLM["LLM — Claude / GPT\nClip Detection"]
-        FFmpeg["ffmpeg\n9:16 Crop · Cut · Caption Burn"]
+    subgraph Backend ["Backend (Python + FastAPI)"]
+        API["REST API\nPOST /jobs/upload-url\nPOST /jobs/upload-complete\nGET /jobs/:id"]
+        StripeAPI["Stripe\nCheckout · Webhooks"]
+        YouTubeAPI["YouTube OAuth\nClip Upload"]
     end
 
-    subgraph Storage ["AWS S3 (ai-repurposer-clips · us-east-2)"]
-        RawBucket["raw/{jobId}/\nOriginal MP4"]
-        ClipsBucket["clips/{jobId}/\nFinal Vertical Clips"]
-    end
-
-    subgraph Auth ["Supabase — planned"]
-        DB["Postgres\nUsers · Job History"]
+    subgraph Supabase ["Supabase"]
         SupaAuth["Auth\nEmail / OAuth"]
+        DB["Postgres\njobs · clips · profiles\nyoutube_tokens"]
     end
 
-    subgraph Payments ["Stripe — planned"]
-        Checkout["Checkout · Subscriptions\nFree Trial Enforcement"]
+    subgraph S3 ["AWS S3 (us-east-2)"]
+        RawBucket["raw/{jobId}/\nOriginal MP4\n(lifecycle rule auto-deletes)"]
+        ClipsBucket["clips/{jobId}/\nFinal Vertical Clips"]
+        ThumbBucket["thumbnails/{jobId}/\nThumbnails"]
     end
 
-    User -->|"Paste YouTube URL"| UI
-    UI -->|"POST /jobs"| API
-    API --> JobStore
-    API --> Downloader
-    Downloader -->|"raw MP4"| RawBucket
-    RawBucket --> Whisper
-    Whisper -->|"transcript + timestamps"| LLM
-    LLM -->|"clip timestamps"| FFmpeg
-    FFmpeg -->|"vertical MP4s"| ClipsBucket
-    ClipsBucket -->|"presigned URLs"| UI
+    subgraph Modal ["Modal (Serverless GPU/CPU)"]
+        Download["S3 Download"]
+        H264["H.264 Check\n+ Transcode if needed"]
+        Whisper["OpenAI Whisper\nTimestamped Transcript"]
+        GPT["GPT-4o\nClip Detection"]
+        MediaPipe["MediaPipe\nPer-frame Face Tracking"]
+        FFmpeg["ffmpeg\n9:16 Crop · Subtitle Burn\nThumbnail Extract"]
+        Upload["S3 Upload\nClips + Thumbnails"]
+    end
+
+    User -->|"Drop MP4"| UI
+    UI -->|"request presigned URL"| API
+    API -->|"presigned PUT URL"| UI
+    UI -->|"direct upload"| RawBucket
+    UI -->|"upload-complete"| API
+    API -->|"spawn job"| Modal
+
+    Download --> H264
+    H264 --> Whisper
+    Whisper --> GPT
+    GPT --> MediaPipe
+    MediaPipe --> FFmpeg
+    FFmpeg --> Upload
+    Upload --> ClipsBucket
+    Upload --> ThumbBucket
+
+    ClipsBucket -->|"presigned GET URLs"| UI
+    ThumbBucket -->|"presigned GET URLs"| UI
     UI --> User
 
     SupaAuth --> UI
-    DB --> API
-    Checkout --> UI
+    DB <--> API
+    DB <--> Modal
+    StripeAPI --> UI
+    YouTubeAPI --> UI
 
     classDef built fill:#1a1a2e,stroke:#4f8ef7,color:#fff
-    classDef planned fill:#1a1a2e,stroke:#555,color:#888,stroke-dasharray:5 5
     classDef storage fill:#0f3460,stroke:#4f8ef7,color:#fff
+    classDef compute fill:#0d2137,stroke:#4f8ef7,color:#fff
 
-    class API,JobStore,Downloader,Whisper,LLM,FFmpeg built
-    class UI,SupaAuth,DB,Checkout planned
-    class RawBucket,ClipsBucket storage
+    class API,StripeAPI,YouTubeAPI,SupaAuth,DB built
+    class RawBucket,ClipsBucket,ThumbBucket storage
+    class Download,H264,Whisper,GPT,MediaPipe,FFmpeg,Upload compute
 ```
 
 ---
