@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { requestUploadUrl, uploadToS3, completeUpload, getJob, getJobs, cancelJob } from "./api";
+import { getJob, getJobs, cancelJob } from "./api";
 import type { Job } from "./types";
 import { UrlForm } from "./components/UrlForm";
 import { JobSection } from "./components/JobSection";
@@ -7,6 +7,7 @@ import { LoginPage } from "./components/LoginPage";
 import { PricingPage } from "./components/PricingPage";
 import { useSession } from "./lib/auth";
 import { supabase } from "./lib/supabase";
+import { useUpload } from "./hooks/useUpload";
 
 const TERMINAL = new Set(["done", "failed", "cancelled"]);
 
@@ -34,11 +35,10 @@ export default function App() {
   const session = useSession();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [abortUpload, setAbortUpload] = useState<(() => void) | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"dashboard" | "pricing">("dashboard");
+  const { submit, submitting, uploadProgress, abortUpload, error } = useUpload((job) =>
+    setJobs((prev) => [job, ...prev])
+  );
 
   // Load job history on mount
   useEffect(() => {
@@ -80,48 +80,6 @@ export default function App() {
     } catch {}
   }
 
-  function getVideoDuration(file: File): Promise<number> {
-    return new Promise((resolve) => {
-      const video = document.createElement("video");
-      video.preload = "metadata";
-      video.onloadedmetadata = () => {
-        URL.revokeObjectURL(video.src);
-        resolve(Math.ceil(video.duration));
-      };
-      video.onerror = () => resolve(0);
-      video.src = URL.createObjectURL(file);
-    });
-  }
-
-  async function handleFileSubmit(file: File) {
-    setSubmitting(true);
-    setError(null);
-    setUploadProgress(0);
-    let jobId: string | null = null;
-    try {
-      const [{ job_id, upload_url, s3_key }, durationSeconds] = await Promise.all([
-        requestUploadUrl(file.name),
-        getVideoDuration(file),
-      ]);
-      jobId = job_id;
-      const { promise, abort } = uploadToS3(upload_url, file, setUploadProgress);
-      setAbortUpload(() => abort);
-      await promise;
-      setAbortUpload(null);
-      setUploadProgress(null);
-      const newJob = await completeUpload(job_id, s3_key, durationSeconds);
-      setJobs((prev) => [newJob, ...prev]);
-    } catch (err) {
-      const aborted = err instanceof Error && err.message === "upload_aborted";
-      if (aborted && jobId) await cancelJob(jobId).catch(() => {});
-      if (!aborted) setError(err instanceof Error ? err.message : "Something went wrong");
-      setAbortUpload(null);
-      setUploadProgress(null);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   const isRunning = submitting || jobs.some((j) => !TERMINAL.has(j.status));
 
   if (!session) return <LoginPage />;
@@ -154,7 +112,7 @@ export default function App() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <UrlForm onFileSubmit={handleFileSubmit} disabled={isRunning} uploadProgress={uploadProgress} onCancelUpload={abortUpload ?? undefined} />
+          <UrlForm onFileSubmit={submit} disabled={isRunning} uploadProgress={uploadProgress} onCancelUpload={abortUpload ?? undefined} />
           {error && <p className="text-red-400 text-sm">{error}</p>}
         </div>
 

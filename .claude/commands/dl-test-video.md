@@ -8,7 +8,7 @@ Run this bash command (replace the URL with the one provided by the user):
 yt-dlp \
   --format "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" \
   --merge-output-format mp4 \
-  --output "/Users/jamesmeegan/Desktop/Business /AI Content Repurposer/ai content repurposer code/backend-python/tests/media for testing/%(title)s.%(ext)s" \
+  --output "/Users/jamesmeegan/Desktop/Business /AI Content Repurposer/media-for-testing/%(title)s.%(ext)s" \
   "<URL>"
 ```
 

@@ -57,6 +57,7 @@ def run_pipeline_from_s3_modal(job_id: str, s3_key: str, user_id: str):
 
     import logging
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s — %(message)s")
+    logger = logging.getLogger(__name__)
 
     from services.pipeline import run_pipeline_from_file
 
@@ -69,11 +70,17 @@ def run_pipeline_from_s3_modal(job_id: str, s3_key: str, user_id: str):
     refund_credits = _make_refund_credits(job_id, user_id)
     update_job(job_id, {"status": "downloading"})
 
-    boto3.client(
-        "s3",
-        region_name=os.environ.get("AWS_REGION", "us-east-1"),
-        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
-    ).download_file(bucket, s3_key, file_path)
+    try:
+        boto3.client(
+            "s3",
+            region_name=os.environ.get("AWS_REGION", "us-east-1"),
+            aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+            aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+        ).download_file(bucket, s3_key, file_path)
+    except Exception as exc:
+        logger.error(f"[{job_id}] S3 download failed — {exc}")
+        update_job(job_id, {"status": "failed", "error": f"S3 download failed: {exc}"})
+        refund_credits()
+        return
 
     run_pipeline_from_file(job_id, file_path, temp_dir, update_job, raw_s3_key=s3_key, refund_credits_fn=refund_credits)

@@ -33,15 +33,16 @@ export async function getJobs(): Promise<Job[]> {
 
 export async function requestUploadUrl(
   filename: string,
+  durationSeconds: number,
 ): Promise<{ job_id: string; upload_url: string; s3_key: string }> {
   const res = await fetch(`${BASE}/jobs/upload-url`, {
     method: "POST",
     headers: await authHeaders(),
-    body: JSON.stringify({ filename }),
+    body: JSON.stringify({ filename, duration_seconds: durationSeconds }),
   });
   if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(err.detail ?? "Failed to initialize upload");
+    const { detail } = await res.json();
+    throw new Error(detail ?? "Failed to initialize upload");
   }
   return res.json();
 }
@@ -76,8 +77,8 @@ export async function completeUpload(jobId: string, s3Key: string, durationSecon
     body: JSON.stringify({ job_id: jobId, s3_key: s3Key, duration_seconds: durationSeconds }),
   });
   if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(err.detail ?? "Failed to start processing");
+    const { detail } = await res.json();
+    throw new Error(detail ?? "Failed to start processing");
   }
   return res.json();
 }
@@ -100,8 +101,8 @@ export async function cancelJob(id: string): Promise<void> {
     headers: await authHeaders(),
   });
   if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(err.detail ?? "Failed to cancel job");
+    const { detail } = await res.json();
+    throw new Error(detail ?? "Failed to cancel job");
   }
 }
 
