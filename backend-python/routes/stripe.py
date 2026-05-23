@@ -14,6 +14,87 @@ router = APIRouter()
 _WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
 
+def _customer_id(value) -> str:
+    return value if isinstance(value, str) else value["id"]
+
+
+def _profile_by_customer(customer_id: str):
+    return supabase.table("profiles").select("id, credits_remaining").eq("stripe_customer_id", customer_id).single().execute()
+
+
+def _is_duplicate_event(event_id: str) -> bool:
+    existing = supabase.table("stripe_webhook_events").select("event_id").eq("event_id", event_id).execute()
+    if existing.data:
+        return True
+    supabase.table("stripe_webhook_events").insert({"event_id": event_id}).execute()
+    return False
+
+
+def _handle_checkout_session_completed(session: dict, now: str) -> None:
+    user_id = session.get("metadata", {}).get("userId")
+    if not user_id:
+        return
+    if session.get("metadata", {}).get("type") == "topup":
+        add_credits(supabase, user_id, 100)
+    else:
+        supabase.table("profiles").upsert({
+            "id": user_id,
+            "subscription_status": "active",
+            "updated_at": now,
+        }).execute()
+        reset_monthly_credits(supabase, user_id)
+
+
+def _handle_invoice_payment_succeeded(invoice: dict) -> None:
+    # Only reset on subscription renewals; initial charge is covered by checkout.session.completed.
+    if invoice.get("billing_reason") != "subscription_cycle":
+        return
+    customer_id = _customer_id(invoice["customer"])
+    profile = supabase.table("profiles").select("id").eq("stripe_customer_id", customer_id).single().execute()
+    if profile.data:
+        reset_monthly_credits(supabase, profile.data["id"])
+
+
+def _handle_subscription_updated(sub: dict, now: str) -> None:
+    customer_id = _customer_id(sub["customer"])
+    supabase.table("profiles").update({
+        "subscription_status": sub["status"],
+        "updated_at": now,
+    }).eq("stripe_customer_id", customer_id).execute()
+
+
+def _handle_subscription_deleted(sub: dict, now: str) -> None:
+    customer_id = _customer_id(sub["customer"])
+    supabase.table("profiles").update({
+        "subscription_status": "inactive",
+        "updated_at": now,
+    }).eq("stripe_customer_id", customer_id).execute()
+
+
+def _handle_charge_refunded(charge: dict, now: str) -> None:
+    customer_id = charge.get("customer")
+    if not customer_id:
+        return
+    profile = _profile_by_customer(_customer_id(customer_id))
+    if not profile.data:
+        return
+    user_id = profile.data["id"]
+    if charge.get("invoice"):
+        # Subscription refund — revoke subscription and zero out credits.
+        supabase.table("profiles").update({
+            "subscription_status": "inactive",
+            "credits_remaining": 0,
+            "updated_at": now,
+        }).eq("id", user_id).execute()
+    else:
+        # Top-up refund — claw back 100 credits (floor at 0).
+        new_credits = max(0, profile.data["credits_remaining"] - 100)
+        supabase.table("profiles").update({
+            "credits_remaining": new_credits,
+            "updated_at": now,
+        }).eq("id", user_id).execute()
+
+
 @webhook_router.post("/webhook")
 async def stripe_webhook(request: Request) -> dict:
     payload = await request.body()
@@ -27,52 +108,22 @@ async def stripe_webhook(request: Request) -> dict:
     except stripe.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid signature")
 
+    if _is_duplicate_event(event["id"]):
+        return {"received": True}
+
     now = datetime.now(timezone.utc).isoformat()
+    obj = event["data"]["object"]
 
-    # BUG: no idempotency check — Stripe retries webhooks on timeout/5xx, so this
-    # handler can fire multiple times for the same event, adding credits repeatedly.
-    # Fix: store processed event IDs (event["id"]) in a DB table and skip duplicates.
     if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-        user_id = session.get("metadata", {}).get("userId")
-        session_type = session.get("metadata", {}).get("type")
-        if user_id:
-            if session_type == "topup":
-                add_credits(supabase, user_id, 100)
-            else:
-                supabase.table("profiles").upsert({
-                    "id": user_id,
-                    "subscription_status": "active",
-                    "updated_at": now,
-                }).execute()
-                reset_monthly_credits(supabase, user_id)
-
+        _handle_checkout_session_completed(obj, now)
     elif event["type"] == "invoice.payment_succeeded":
-        invoice = event["data"]["object"]
-        # Only reset on subscription renewals, not the initial charge (covered by checkout.session.completed)
-        if invoice.get("billing_reason") == "subscription_cycle":
-            customer_id = invoice["customer"] if isinstance(invoice["customer"], str) else invoice["customer"]["id"]
-            profile = supabase.table("profiles").select("id").eq("stripe_customer_id", customer_id).single().execute()
-            if profile.data:
-                reset_monthly_credits(supabase, profile.data["id"])
-
+        _handle_invoice_payment_succeeded(obj)
     elif event["type"] == "customer.subscription.updated":
-        sub = event["data"]["object"]
-        customer_id = sub["customer"] if isinstance(sub["customer"], str) else sub["customer"]["id"]
-        supabase.table("profiles").update({
-            "subscription_status": sub["status"],
-            "updated_at": now,
-        }).eq("stripe_customer_id", customer_id).execute()
-
-    # MISSING: no handler for charge.refunded — if a user gets a monetary refund via
-    # the customer portal or support, their credits are not clawed back.
+        _handle_subscription_updated(obj, now)
     elif event["type"] == "customer.subscription.deleted":
-        sub = event["data"]["object"]
-        customer_id = sub["customer"] if isinstance(sub["customer"], str) else sub["customer"]["id"]
-        supabase.table("profiles").update({
-            "subscription_status": "inactive",
-            "updated_at": now,
-        }).eq("stripe_customer_id", customer_id).execute()
+        _handle_subscription_deleted(obj, now)
+    elif event["type"] == "charge.refunded":
+        _handle_charge_refunded(obj, now)
 
     return {"received": True}
 
