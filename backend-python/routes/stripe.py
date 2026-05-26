@@ -35,22 +35,27 @@ def _is_duplicate_event(event_id: str) -> bool:
 
 def _handle_checkout_session_completed(session, now: str) -> None:
     try:
+        # Stripe metadata is a StripeObject, not a normal dict — use [] access, not .get()
         metadata = session["metadata"] or {}
-        user_id = metadata.get("userId")
-        if not user_id:
-            return
-        if metadata.get("type") == "topup":
-            add_credits(supabase, user_id, 100)
-        else:
-            supabase.table("profiles").upsert({
-                "id": user_id,
-                "subscription_status": "active",
-                "updated_at": now,
-            }).execute()
-            reset_monthly_credits(supabase, user_id)
-    except Exception:
-        logger.exception("Error handling checkout.session.completed")
+        user_id = metadata["userId"]
 
+        if metadata["type"] == "topup":
+            add_credits(supabase, user_id, 100)
+            return
+
+        supabase.table("profiles").upsert({
+            "id": user_id,
+            "subscription_status": "active",
+            "updated_at": now,
+        }).execute()
+
+        reset_monthly_credits(supabase, user_id)
+
+    except Exception:
+        logger.exception(
+            "Error handling checkout.session.completed session_id=%s",
+            session["id"],
+        )
 
 def _handle_invoice_payment_succeeded(invoice) -> None:
     # Only reset on subscription renewals; initial charge is covered by checkout.session.completed.
