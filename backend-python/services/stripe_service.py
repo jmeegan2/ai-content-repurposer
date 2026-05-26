@@ -4,9 +4,12 @@ from datetime import datetime, timezone
 from services.supabase_client import supabase
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
-_PRICE_ID = os.environ.get("STRIPE_PRICE_ID", "")
+_PRICE_ID = os.environ.get("STRIPE_PRO_PRICE_ID", "")
 _TOPUP_PRICE_ID = os.environ.get("STRIPE_TOPUP_PRICE_ID", "")
 _FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+
+PRO_PLAN = {"name": "Pro Subscription", "price_usd": 9.99, "credits": 150, "interval": "month"}
+TOPUP_PLAN = {"name": "Credits Top-up", "price_usd": 7.99, "credits": 100, "interval": "one-time"}
 
 
 def get_or_create_customer(user_id: str, email: str) -> str:

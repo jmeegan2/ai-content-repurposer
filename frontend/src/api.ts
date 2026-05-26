@@ -94,6 +94,40 @@ export async function createCheckoutSession(email: string): Promise<string> {
   return data.url;
 }
 
+export async function getCredits(): Promise<{ creditsRemaining: number; creditsUsed: number; subscriptionStatus: string }> {
+  const res = await fetch(`${BASE}/stripe/credits`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch credits");
+  const data = await res.json() as { credits_remaining: number; credits_used: number; subscription_status: string };
+  return {
+    creditsRemaining: data.credits_remaining,
+    creditsUsed: data.credits_used,
+    subscriptionStatus: data.subscription_status,
+  };
+}
+
+export async function createTopupSession(email: string): Promise<string> {
+  const res = await fetch(`${BASE}/stripe/create-topup-session`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error("Failed to create top-up session");
+  const data = (await res.json()) as { url: string };
+  return data.url;
+}
+
+export async function createPortalSession(): Promise<string> {
+  const res = await fetch(`${BASE}/stripe/create-portal-session`, {
+    method: "POST",
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to create portal session");
+  const data = (await res.json()) as { url: string };
+  return data.url;
+}
+
 export async function cancelJob(id: string): Promise<void> {
   if (!UUID_RE.test(id)) throw new Error("Invalid job ID");
   const res = await fetch(`${BASE}/jobs/${id}`, {

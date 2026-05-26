@@ -41,7 +41,7 @@ jobs:
           AWS_S3_BUCKET: test-bucket
           STRIPE_SECRET_KEY: sk_test_dummy
           STRIPE_WEBHOOK_SECRET: whsec_dummy
-          STRIPE_PRICE_ID: price_dummy
+          STRIPE_PRO_PRICE_ID: price_dummy
 
   frontend:
     name: Frontend Tests

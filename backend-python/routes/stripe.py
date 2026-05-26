@@ -1,6 +1,9 @@
+import logging
 import os
 from datetime import datetime, timezone
 import stripe
+
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from middleware.auth import require_auth
@@ -30,24 +33,28 @@ def _is_duplicate_event(event_id: str) -> bool:
     return False
 
 
-def _handle_checkout_session_completed(session: dict, now: str) -> None:
-    user_id = session.get("metadata", {}).get("userId")
-    if not user_id:
-        return
-    if session.get("metadata", {}).get("type") == "topup":
-        add_credits(supabase, user_id, 100)
-    else:
-        supabase.table("profiles").upsert({
-            "id": user_id,
-            "subscription_status": "active",
-            "updated_at": now,
-        }).execute()
-        reset_monthly_credits(supabase, user_id)
+def _handle_checkout_session_completed(session, now: str) -> None:
+    try:
+        metadata = session["metadata"] or {}
+        user_id = metadata.get("userId")
+        if not user_id:
+            return
+        if metadata.get("type") == "topup":
+            add_credits(supabase, user_id, 100)
+        else:
+            supabase.table("profiles").upsert({
+                "id": user_id,
+                "subscription_status": "active",
+                "updated_at": now,
+            }).execute()
+            reset_monthly_credits(supabase, user_id)
+    except Exception:
+        logger.exception("Error handling checkout.session.completed")
 
 
-def _handle_invoice_payment_succeeded(invoice: dict) -> None:
+def _handle_invoice_payment_succeeded(invoice) -> None:
     # Only reset on subscription renewals; initial charge is covered by checkout.session.completed.
-    if invoice.get("billing_reason") != "subscription_cycle":
+    if invoice["billing_reason"] != "subscription_cycle":
         return
     customer_id = _customer_id(invoice["customer"])
     profile = supabase.table("profiles").select("id").eq("stripe_customer_id", customer_id).single().execute()
@@ -71,15 +78,15 @@ def _handle_subscription_deleted(sub: dict, now: str) -> None:
     }).eq("stripe_customer_id", customer_id).execute()
 
 
-def _handle_charge_refunded(charge: dict, now: str) -> None:
-    customer_id = charge.get("customer")
+def _handle_charge_refunded(charge, now: str) -> None:
+    customer_id = charge["customer"]
     if not customer_id:
         return
     profile = _profile_by_customer(_customer_id(customer_id))
     if not profile.data:
         return
     user_id = profile.data["id"]
-    if charge.get("invoice"):
+    if charge["invoice"]:
         # Subscription refund — revoke subscription and zero out credits.
         supabase.table("profiles").update({
             "subscription_status": "inactive",
@@ -136,6 +143,9 @@ class CheckoutRequest(BaseModel):
 def create_checkout(body: CheckoutRequest, user_id: str = Depends(require_auth)) -> dict:
     if not body.email:
         raise HTTPException(status_code=400, detail="Email required")
+    profile = supabase.table("profiles").select("subscription_status").eq("id", user_id).single().execute()
+    if profile.data and profile.data.get("subscription_status") == "active":
+        raise HTTPException(status_code=400, detail="Already have an active subscription")
     try:
         customer_id = get_or_create_customer(user_id, body.email)
         url = create_checkout_session(customer_id, user_id)

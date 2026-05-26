@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getJob, getJobs, cancelJob } from "./api";
+import { getJob, getJobs, cancelJob, getCredits } from "./api";
 import type { Job } from "./types";
 import { UrlForm } from "./components/UrlForm";
 import { JobSection } from "./components/JobSection";
@@ -36,11 +36,13 @@ export default function App() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [view, setView] = useState<"dashboard" | "pricing">("dashboard");
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string>("inactive");
+  const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
   const { submit, submitting, uploadProgress, abortUpload, error } = useUpload((job) =>
     setJobs((prev) => [job, ...prev])
   );
 
-  // Load job history on mount
+  // Load job history and subscription status on mount
   useEffect(() => {
     if (!session) return;
     setLoadingJobs(true);
@@ -48,6 +50,12 @@ export default function App() {
       .then(setJobs)
       .catch(() => {})
       .finally(() => setLoadingJobs(false));
+    getCredits()
+      .then((data) => {
+        setSubscriptionStatus(data.subscriptionStatus);
+        setCreditsRemaining(data.creditsRemaining);
+      })
+      .catch(() => {});
   }, [session?.user.id]);
 
   // Poll all active jobs every 2s
@@ -83,7 +91,7 @@ export default function App() {
   const isRunning = submitting || jobs.some((j) => !TERMINAL.has(j.status));
 
   if (!session) return <LoginPage />;
-  if (view === "pricing") return <PricingPage onBack={() => setView("dashboard")} />;
+  if (view === "pricing") return <PricingPage onBack={() => setView("dashboard")} subscriptionStatus={subscriptionStatus} />;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -96,11 +104,16 @@ export default function App() {
             </p>
           </div>
           <div className="flex items-center gap-4">
+            {creditsRemaining !== null && (
+              <span className="text-zinc-500 text-sm">
+                {creditsRemaining} credits
+              </span>
+            )}
             <button
               onClick={() => setView("pricing")}
               className="text-zinc-400 text-sm hover:text-zinc-200"
             >
-              Upgrade
+              {subscriptionStatus === "active" ? "Top-up" : "Upgrade"}
             </button>
             <button
               onClick={() => supabase.auth.signOut()}

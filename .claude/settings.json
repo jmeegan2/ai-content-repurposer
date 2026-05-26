@@ -13,7 +13,10 @@
       "Bash(cd * && npm run test:coverage*)",
       "Bash(cd * && npm run test:run*)",
       "Bash(cd * && npx tsc*)",
-      "Read"
+      "Read",
+      "Bash(ls*)",
+      "Bash(find*)",
+      "Bash(cat*)"
     ]
   }
 }
