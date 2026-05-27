@@ -1,15 +1,22 @@
 import logging
 import os
 from datetime import datetime, timezone
-import stripe
 
-logger = logging.getLogger(__name__)
+import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+
 from middleware.auth import require_auth
+from services.credits import add_credits, get_profile, reset_monthly_credits
+from services.stripe_service import (
+    create_checkout_session,
+    create_portal_session,
+    create_topup_checkout_session,
+    get_or_create_customer,
+)
 from services.supabase_client import supabase
-from services.stripe_service import get_or_create_customer, create_checkout_session, create_portal_session, create_topup_checkout_session
-from services.credits import reset_monthly_credits, add_credits
+
+logger = logging.getLogger(__name__)
 
 webhook_router = APIRouter()
 router = APIRouter()
@@ -39,7 +46,7 @@ def _handle_checkout_session_completed(session, now: str) -> None:
         metadata = session["metadata"] or {}
         user_id = metadata["userId"]
 
-        if metadata["type"] == "topup":
+        if "type" in metadata and metadata["type"] == "topup":
             add_credits(supabase, user_id, 100)
             return
 
@@ -175,7 +182,6 @@ def create_portal(user_id: str = Depends(require_auth)) -> dict:
 
 @router.get("/credits")
 def get_credits(user_id: str = Depends(require_auth)) -> dict:
-    from services.credits import get_profile
     profile = get_profile(supabase, user_id)
     return {
         "credits_remaining": profile["credits_remaining"],
