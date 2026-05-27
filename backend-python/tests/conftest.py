@@ -1,4 +1,8 @@
+import sys
+from unittest.mock import MagicMock
 import os
+
+sys.modules.setdefault("modal", MagicMock())
 
 os.environ.setdefault("OPENAI_API_KEY", "test")
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
