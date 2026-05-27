@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import { EMAIL_ENABLED } from "../lib/config";
 
 type View = "signin" | "forgot" | "forgot-sent";
 
@@ -114,12 +115,14 @@ export function LoginPage({ onSignUp }: Props) {
         </button>
       </form>
       <div className="flex flex-col gap-2">
-        <button
-          onClick={() => { setView("forgot"); setError(null); }}
-          className="text-zinc-500 text-sm hover:text-zinc-300 text-left"
-        >
-          Forgot password?
-        </button>
+        {EMAIL_ENABLED && (
+          <button
+            onClick={() => { setView("forgot"); setError(null); }}
+            className="text-zinc-500 text-sm hover:text-zinc-300 text-left"
+          >
+            Forgot password?
+          </button>
+        )}
         <button
           onClick={onSignUp}
           className="text-zinc-500 text-sm hover:text-zinc-300 text-left"

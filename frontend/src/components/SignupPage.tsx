@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Shell } from "./LoginPage";
+import { EMAIL_ENABLED } from "../lib/config";
 
 interface Props {
   onSignIn: () => void;
@@ -35,7 +36,9 @@ export function SignupPage({ onSignIn }: Props) {
     return (
       <Shell>
         <p className="text-zinc-300 text-sm">
-          Check your inbox for a confirmation link. If nothing arrives, you may already have an account — try signing in.
+          {EMAIL_ENABLED
+            ? "Check your inbox for a confirmation link. If you don't see it, you may already have an account — try signing in instead."
+            : "Account created! You can now sign in."}
         </p>
         <button
           onClick={onSignIn}
