@@ -101,6 +101,7 @@ export default function App() {
       setJobs((prev) =>
         prev.map((j) => (j.id === jobId ? { ...j, status: "cancelled" } : j))
       );
+      getCredits().then((data) => setCreditsRemaining(data.creditsRemaining));
     } catch {}
   }
 
