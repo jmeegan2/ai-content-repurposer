@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
-import { requestUploadUrl, uploadToS3, completeUpload, getJob, getJobs, cancelJob } from "./api";
+import { getJob, getJobs, cancelJob, getCredits } from "./api";
 import type { Job } from "./types";
 import { UrlForm } from "./components/UrlForm";
 import { JobSection } from "./components/JobSection";
 import { LoginPage } from "./components/LoginPage";
+import { SignupPage } from "./components/SignupPage";
 import { PricingPage } from "./components/PricingPage";
-import { useSession } from "./lib/auth";
+import { ResetPasswordPage } from "./components/ResetPasswordPage";
+import { useSession, useAuthEvent } from "./lib/auth";
 import { supabase } from "./lib/supabase";
+import { useUpload } from "./hooks/useUpload";
 
 const TERMINAL = new Set(["done", "failed", "cancelled"]);
 
@@ -32,15 +35,18 @@ function ClipCardSkeleton() {
 
 export default function App() {
   const session = useSession();
+  const authEvent = useAuthEvent();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [abortUpload, setAbortUpload] = useState<(() => void) | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"dashboard" | "pricing">("dashboard");
+  const [authView, setAuthView] = useState<"login" | "signup">("login");
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | undefined>(undefined);
+  const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
+  const { submit, submitting, uploadProgress, abortUpload, error } = useUpload((job) =>
+    setJobs((prev) => [job, ...prev])
+  );
 
-  // Load job history on mount
+  // Load job history and subscription status on mount
   useEffect(() => {
     if (!session) return;
     setLoadingJobs(true);
@@ -48,6 +54,12 @@ export default function App() {
       .then(setJobs)
       .catch(() => {})
       .finally(() => setLoadingJobs(false));
+    getCredits()
+      .then((data) => {
+        setSubscriptionStatus(data.subscriptionStatus);
+        setCreditsRemaining(data.creditsRemaining);
+      })
+      .catch(() => {});
   }, [session?.user.id]);
 
   // Poll all active jobs every 2s
@@ -55,14 +67,26 @@ export default function App() {
   useEffect(() => {
     if (activeIds.length === 0) return;
     const interval = setInterval(async () => {
+      let shouldRefreshCredits = false;
       await Promise.all(
         activeIds.map(async (id) => {
           try {
             const updated = await getJob(id);
             setJobs((prev) => prev.map((j) => (j.id === id ? updated : j)));
+            if (updated.status === "done" || updated.status === "failed") {
+              shouldRefreshCredits = true;
+            }
           } catch {}
         }),
       );
+      if (shouldRefreshCredits) {
+        getCredits()
+          .then((data) => {
+            setSubscriptionStatus(data.subscriptionStatus);
+            setCreditsRemaining(data.creditsRemaining);
+          })
+          .catch(() => {});
+      }
     }, 2000);
     return () => clearInterval(interval);
   }, [activeIds.join(",")]);
@@ -77,55 +101,18 @@ export default function App() {
       setJobs((prev) =>
         prev.map((j) => (j.id === jobId ? { ...j, status: "cancelled" } : j))
       );
+      getCredits().then((data) => setCreditsRemaining(data.creditsRemaining));
     } catch {}
-  }
-
-  function getVideoDuration(file: File): Promise<number> {
-    return new Promise((resolve) => {
-      const video = document.createElement("video");
-      video.preload = "metadata";
-      video.onloadedmetadata = () => {
-        URL.revokeObjectURL(video.src);
-        resolve(Math.ceil(video.duration));
-      };
-      video.onerror = () => resolve(0);
-      video.src = URL.createObjectURL(file);
-    });
-  }
-
-  async function handleFileSubmit(file: File) {
-    setSubmitting(true);
-    setError(null);
-    setUploadProgress(0);
-    let jobId: string | null = null;
-    try {
-      const [{ job_id, upload_url, s3_key }, durationSeconds] = await Promise.all([
-        requestUploadUrl(file.name),
-        getVideoDuration(file),
-      ]);
-      jobId = job_id;
-      const { promise, abort } = uploadToS3(upload_url, file, setUploadProgress);
-      setAbortUpload(() => abort);
-      await promise;
-      setAbortUpload(null);
-      setUploadProgress(null);
-      const newJob = await completeUpload(job_id, s3_key, durationSeconds);
-      setJobs((prev) => [newJob, ...prev]);
-    } catch (err) {
-      const aborted = err instanceof Error && err.message === "upload_aborted";
-      if (aborted && jobId) await cancelJob(jobId).catch(() => {});
-      if (!aborted) setError(err instanceof Error ? err.message : "Something went wrong");
-      setAbortUpload(null);
-      setUploadProgress(null);
-    } finally {
-      setSubmitting(false);
-    }
   }
 
   const isRunning = submitting || jobs.some((j) => !TERMINAL.has(j.status));
 
-  if (!session) return <LoginPage />;
-  if (view === "pricing") return <PricingPage onBack={() => setView("dashboard")} />;
+  if (authEvent === "PASSWORD_RECOVERY") return <ResetPasswordPage />;
+  if (!session) {
+    if (authView === "signup") return <SignupPage onSignIn={() => setAuthView("login")} />;
+    return <LoginPage onSignUp={() => setAuthView("signup")} />;
+  }
+  if (view === "pricing") return <PricingPage onBack={() => setView("dashboard")} subscriptionStatus={subscriptionStatus} />;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -138,11 +125,16 @@ export default function App() {
             </p>
           </div>
           <div className="flex items-center gap-4">
+            {creditsRemaining !== null && (
+              <span className="text-zinc-500 text-sm">
+                {creditsRemaining} credits
+              </span>
+            )}
             <button
               onClick={() => setView("pricing")}
               className="text-zinc-400 text-sm hover:text-zinc-200"
             >
-              Upgrade
+              {subscriptionStatus && (subscriptionStatus === "active" ? "Top-up" : "Upgrade")}
             </button>
             <button
               onClick={() => supabase.auth.signOut()}
@@ -154,7 +146,7 @@ export default function App() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <UrlForm onFileSubmit={handleFileSubmit} disabled={isRunning} uploadProgress={uploadProgress} onCancelUpload={abortUpload ?? undefined} />
+          <UrlForm onFileSubmit={submit} disabled={isRunning} uploadProgress={uploadProgress} onCancelUpload={abortUpload ?? undefined} />
           {error && <p className="text-red-400 text-sm">{error}</p>}
         </div>
 

@@ -9,23 +9,25 @@ def get_profile(supabase, user_id: str) -> dict:
     return resp.data
 
 
-def deduct_credits(supabase, user_id: str, amount: int) -> None:
-    # BUG: race condition — read-then-write is not atomic. Two concurrent requests
-    # can both read the same balance and both succeed, allowing double-spend.
-    # Fix: use a Postgres RPC with UPDATE ... WHERE credits_remaining >= amount RETURNING *
+def check_credits(supabase, user_id: str, amount: int) -> None:
     profile = get_profile(supabase, user_id)
-    remaining = profile["credits_remaining"]
-    if remaining < amount:
+    if profile["credits_remaining"] < amount:
         raise HTTPException(
             status_code=402,
-            detail={
-                "error": "insufficient_credits",
-                "credits_needed": amount,
-                "credits_remaining": remaining,
-            },
+            detail=f"Not enough credits. You need {amount} but only have {profile['credits_remaining']} remaining.",
+        )
+
+
+def deduct_credits(supabase, user_id: str, amount: int) -> None:
+    # Read-then-write is not atomic, but one_active_job_per_user constraint makes concurrent deductions unreachable.
+    profile = get_profile(supabase, user_id)
+    if profile["credits_remaining"] < amount:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Not enough credits. You need {amount} but only have {profile['credits_remaining']} remaining.",
         )
     supabase.table("profiles").update({
-        "credits_remaining": remaining - amount,
+        "credits_remaining": profile["credits_remaining"] - amount,
         "credits_used": profile["credits_used"] + amount,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", user_id).execute()

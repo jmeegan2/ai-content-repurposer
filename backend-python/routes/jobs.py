@@ -13,7 +13,7 @@ from models import Job, Clip
 from middleware.auth import require_auth
 from services.supabase_client import supabase
 from services.s3 import get_presigned_url, generate_presigned_upload_url
-from services.credits import deduct_credits, add_credits, refund_job_credits
+from services.credits import deduct_credits, refund_job_credits, check_credits
 import modal
 
 router = APIRouter()
@@ -58,6 +58,7 @@ def _attach_clip_urls(clip: Clip) -> None:
 
 class UploadUrlRequest(BaseModel):
     filename: str
+    duration_seconds: int
 
 
 class UploadCompleteRequest(BaseModel):
@@ -73,6 +74,9 @@ def request_upload_url(
 ):
     if not body.filename.lower().endswith(".mp4"):
         raise HTTPException(status_code=400, detail="Only .mp4 files are supported")
+
+    credits_needed = math.ceil(body.duration_seconds / 60)
+    check_credits(supabase, user_id, credits_needed)
 
     job_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()

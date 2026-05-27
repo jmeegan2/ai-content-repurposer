@@ -131,7 +131,7 @@ AWS_SECRET_ACCESS_KEY=
 AWS_S3_BUCKET=ai-repurposer-clips
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
-STRIPE_PRICE_ID=
+STRIPE_PRO_PRICE_ID=
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 FRONTEND_URL=http://localhost:5173
@@ -179,5 +179,8 @@ CREATE TABLE public.youtube_tokens (
   access_token text NOT NULL,
   refresh_token text NOT NULL,
   token_expiry timestamptz NOT NULL
+);
+CREATE TABLE public.stripe_webhook_events (
+  event_id text PRIMARY KEY  -- Stripe evt_... ID; insert-only idempotency guard, no FKs
 );
 ```

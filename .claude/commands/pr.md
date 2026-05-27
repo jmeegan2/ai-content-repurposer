@@ -18,9 +18,6 @@ Run these in parallel:
 - `git status` — see uncommitted changes
 - `git log main..HEAD` — see commits on this branch vs main
 
-### 2. Update DEVLOG.md
-Run `/update-devlog` — it handles the timestamp and entry format.
-
 ### 3. Commit and push
 Run `/commit` — this stages relevant files (including the DEVLOG update), commits, and pushes to the current branch.
 

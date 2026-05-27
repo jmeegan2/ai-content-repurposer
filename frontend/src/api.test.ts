@@ -8,7 +8,7 @@ vi.mock("./lib/supabase", () => ({
   },
 }));
 
-import { getJob } from "./api";
+import { getJob, requestUploadUrl } from "./api";
 
 const mockJob = {
   id: "job-1",
@@ -23,6 +23,41 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("requestUploadUrl", () => {
+  it("returns job_id, upload_url, s3_key on success", async () => {
+    const payload = { job_id: "job-1", upload_url: "https://s3.example.com/upload", s3_key: "raw/job-1/video.mp4" };
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(payload), { status: 201 }),
+    );
+
+    const result = await requestUploadUrl("video.mp4", 120);
+    expect(result).toEqual(payload);
+  });
+
+  it("throws the backend detail message on 402", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ detail: "Not enough credits. You need 2 but only have 0 remaining." }),
+        { status: 402 },
+      ),
+    );
+
+    await expect(requestUploadUrl("video.mp4", 120)).rejects.toThrow(
+      "Not enough credits. You need 2 but only have 0 remaining.",
+    );
+  });
+
+  it("throws fallback message when no detail is present", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({}), { status: 500 }),
+    );
+
+    await expect(requestUploadUrl("video.mp4", 120)).rejects.toThrow(
+      "Failed to initialize upload",
+    );
+  });
+});
+
 describe("getJob", () => {
   it("fetches job by id", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
@@ -32,7 +67,7 @@ describe("getJob", () => {
     const result = await getJob("550e8400-e29b-41d4-a716-446655440000");
 
     expect(fetch).toHaveBeenCalledWith(
-      "http://localhost:3001/jobs/550e8400-e29b-41d4-a716-446655440000",
+      "http://localhost:8000/jobs/550e8400-e29b-41d4-a716-446655440000",
       expect.objectContaining({ headers: expect.any(Object) }),
     );
     expect(result).toEqual(mockJob);

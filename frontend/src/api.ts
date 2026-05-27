@@ -33,15 +33,16 @@ export async function getJobs(): Promise<Job[]> {
 
 export async function requestUploadUrl(
   filename: string,
+  durationSeconds: number,
 ): Promise<{ job_id: string; upload_url: string; s3_key: string }> {
   const res = await fetch(`${BASE}/jobs/upload-url`, {
     method: "POST",
     headers: await authHeaders(),
-    body: JSON.stringify({ filename }),
+    body: JSON.stringify({ filename, duration_seconds: durationSeconds }),
   });
   if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(err.detail ?? "Failed to initialize upload");
+    const { detail } = await res.json();
+    throw new Error(detail ?? "Failed to initialize upload");
   }
   return res.json();
 }
@@ -76,8 +77,8 @@ export async function completeUpload(jobId: string, s3Key: string, durationSecon
     body: JSON.stringify({ job_id: jobId, s3_key: s3Key, duration_seconds: durationSeconds }),
   });
   if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(err.detail ?? "Failed to start processing");
+    const { detail } = await res.json();
+    throw new Error(detail ?? "Failed to start processing");
   }
   return res.json();
 }
@@ -93,6 +94,40 @@ export async function createCheckoutSession(email: string): Promise<string> {
   return data.url;
 }
 
+export async function getCredits(): Promise<{ creditsRemaining: number; creditsUsed: number; subscriptionStatus: string }> {
+  const res = await fetch(`${BASE}/stripe/credits`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch credits");
+  const data = await res.json() as { credits_remaining: number; credits_used: number; subscription_status: string };
+  return {
+    creditsRemaining: data.credits_remaining,
+    creditsUsed: data.credits_used,
+    subscriptionStatus: data.subscription_status,
+  };
+}
+
+export async function createTopupSession(email: string): Promise<string> {
+  const res = await fetch(`${BASE}/stripe/create-topup-session`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error("Failed to create top-up session");
+  const data = (await res.json()) as { url: string };
+  return data.url;
+}
+
+export async function createPortalSession(): Promise<string> {
+  const res = await fetch(`${BASE}/stripe/create-portal-session`, {
+    method: "POST",
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to create portal session");
+  const data = (await res.json()) as { url: string };
+  return data.url;
+}
+
 export async function cancelJob(id: string): Promise<void> {
   if (!UUID_RE.test(id)) throw new Error("Invalid job ID");
   const res = await fetch(`${BASE}/jobs/${id}`, {
@@ -100,8 +135,8 @@ export async function cancelJob(id: string): Promise<void> {
     headers: await authHeaders(),
   });
   if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(err.detail ?? "Failed to cancel job");
+    const { detail } = await res.json();
+    throw new Error(detail ?? "Failed to cancel job");
   }
 }
 
