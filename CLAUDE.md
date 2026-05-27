@@ -180,4 +180,7 @@ CREATE TABLE public.youtube_tokens (
   refresh_token text NOT NULL,
   token_expiry timestamptz NOT NULL
 );
+CREATE TABLE public.stripe_webhook_events (
+  event_id text PRIMARY KEY  -- Stripe evt_... ID; insert-only idempotency guard, no FKs
+);
 ```

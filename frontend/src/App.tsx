@@ -4,8 +4,10 @@ import type { Job } from "./types";
 import { UrlForm } from "./components/UrlForm";
 import { JobSection } from "./components/JobSection";
 import { LoginPage } from "./components/LoginPage";
+import { SignupPage } from "./components/SignupPage";
 import { PricingPage } from "./components/PricingPage";
-import { useSession } from "./lib/auth";
+import { ResetPasswordPage } from "./components/ResetPasswordPage";
+import { useSession, useAuthEvent } from "./lib/auth";
 import { supabase } from "./lib/supabase";
 import { useUpload } from "./hooks/useUpload";
 
@@ -33,10 +35,12 @@ function ClipCardSkeleton() {
 
 export default function App() {
   const session = useSession();
+  const authEvent = useAuthEvent();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [view, setView] = useState<"dashboard" | "pricing">("dashboard");
-  const [subscriptionStatus, setSubscriptionStatus] = useState<string>("inactive");
+  const [authView, setAuthView] = useState<"login" | "signup">("login");
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | undefined>(undefined);
   const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
   const { submit, submitting, uploadProgress, abortUpload, error } = useUpload((job) =>
     setJobs((prev) => [job, ...prev])
@@ -63,14 +67,26 @@ export default function App() {
   useEffect(() => {
     if (activeIds.length === 0) return;
     const interval = setInterval(async () => {
+      let shouldRefreshCredits = false;
       await Promise.all(
         activeIds.map(async (id) => {
           try {
             const updated = await getJob(id);
             setJobs((prev) => prev.map((j) => (j.id === id ? updated : j)));
+            if (updated.status === "done" || updated.status === "failed") {
+              shouldRefreshCredits = true;
+            }
           } catch {}
         }),
       );
+      if (shouldRefreshCredits) {
+        getCredits()
+          .then((data) => {
+            setSubscriptionStatus(data.subscriptionStatus);
+            setCreditsRemaining(data.creditsRemaining);
+          })
+          .catch(() => {});
+      }
     }, 2000);
     return () => clearInterval(interval);
   }, [activeIds.join(",")]);
@@ -90,7 +106,11 @@ export default function App() {
 
   const isRunning = submitting || jobs.some((j) => !TERMINAL.has(j.status));
 
-  if (!session) return <LoginPage />;
+  if (authEvent === "PASSWORD_RECOVERY") return <ResetPasswordPage />;
+  if (!session) {
+    if (authView === "signup") return <SignupPage onSignIn={() => setAuthView("login")} />;
+    return <LoginPage onSignUp={() => setAuthView("signup")} />;
+  }
   if (view === "pricing") return <PricingPage onBack={() => setView("dashboard")} subscriptionStatus={subscriptionStatus} />;
 
   return (
@@ -113,7 +133,7 @@ export default function App() {
               onClick={() => setView("pricing")}
               className="text-zinc-400 text-sm hover:text-zinc-200"
             >
-              {subscriptionStatus === "active" ? "Top-up" : "Upgrade"}
+              {subscriptionStatus && (subscriptionStatus === "active" ? "Top-up" : "Upgrade")}
             </button>
             <button
               onClick={() => supabase.auth.signOut()}
