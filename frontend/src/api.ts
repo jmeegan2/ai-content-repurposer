@@ -24,7 +24,7 @@ export async function getJob(id: string): Promise<Job> {
 }
 
 export async function getJobs(): Promise<Job[]> {
-  const res = await fetch(`${BASE}/jobs`, {
+  const res = await fetch(`${BASE}/jobs/`, {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch jobs");
