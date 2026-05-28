@@ -37,7 +37,7 @@ class Clip(AppModel):
     s3_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
     youtube_video_id: Optional[str] = None
-    youtube_upload_status: Optional[YoutubeUploadStatus] = None
+    youtube_upload_status: Optional[str] = None
 
 
 class Job(AppModel):
