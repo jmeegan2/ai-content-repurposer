@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Upload an MP4, get 9:16 vertical clips with face-tracked framing and burned-in captions, ready for TikTok, Reels, and Shorts.
 
+## Branding
+
+- Product name: **HorizonClips**
+- Domain: `horizonclips.app`
+
 ## Stack
 
 | Layer            | Choice                                                  |
