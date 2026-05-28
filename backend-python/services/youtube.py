@@ -4,9 +4,11 @@ import logging
 import secrets
 import hashlib
 import base64 as _base64
+from datetime import datetime, timezone
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from services.supabase_client import supabase
@@ -98,22 +100,33 @@ def _get_refreshed_credentials(user_id: str) -> Credentials:
     if not result.data:
         raise ValueError("YouTube account not connected")
     row = result.data[0]
+    expiry = None
+    if row.get("token_expiry"):
+        expiry = datetime.fromisoformat(row["token_expiry"])
+        if expiry.tzinfo is not None:
+            expiry = expiry.astimezone(timezone.utc).replace(tzinfo=None) # supabase returns tz info and google cant compare properly if it has a timezone 
     creds = Credentials(
         token=row["access_token"],
         refresh_token=row["refresh_token"],
         token_uri="https://oauth2.googleapis.com/token",
         client_id=_CLIENT_ID,
         client_secret=_CLIENT_SECRET,
+        expiry=expiry,
     )
 
     if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        supabase.table("youtube_tokens").update(
-            {
-                "access_token": creds.token,
-                "token_expiry": creds.expiry.isoformat() if creds.expiry else None,
-            }
-        ).eq("user_id", user_id).execute()
+        try:
+            creds.refresh(Request()) # Google call to exchange and refresh the token
+            supabase.table("youtube_tokens").update(
+                {
+                    "access_token": creds.token,
+                    "token_expiry": creds.expiry.isoformat() if creds.expiry else None,
+                }
+            ).eq("user_id", user_id).execute()
+            
+        except RefreshError:
+            supabase.table("youtube_tokens").delete().eq("user_id", user_id).execute() # we delete this token so next time they try to upload it will trigger them to reauth with youtube via /status
+            raise
 
     return creds
 
