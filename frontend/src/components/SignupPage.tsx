@@ -1,13 +1,10 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { Shell } from "./LoginPage";
+import { AuthShell } from "./LoginPage";
 import { EMAIL_ENABLED } from "../lib/config";
 
-interface Props {
-  onSignIn: () => void;
-}
-
-export function SignupPage({ onSignIn }: Props) {
+export function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -34,24 +31,21 @@ export function SignupPage({ onSignIn }: Props) {
 
   if (done) {
     return (
-      <Shell>
+      <AuthShell>
         <p className="text-zinc-300 text-sm">
           {EMAIL_ENABLED
             ? "Check your inbox for a confirmation link. If you don't see it, you may already have an account — try signing in instead."
             : "Account created! You can now sign in."}
         </p>
-        <button
-          onClick={onSignIn}
-          className="text-zinc-500 text-sm hover:text-zinc-300"
-        >
+        <Link to="/login" className="text-zinc-500 text-sm hover:text-zinc-300">
           Back to sign in
-        </button>
-      </Shell>
+        </Link>
+      </AuthShell>
     );
   }
 
   return (
-    <Shell>
+    <AuthShell>
       <form onSubmit={handleSignUp} className="flex flex-col gap-3">
         <input
           type="email"
@@ -59,7 +53,7 @@ export function SignupPage({ onSignIn }: Props) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm outline-none focus:border-zinc-500"
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-sm outline-none focus:border-brand placeholder:text-zinc-500 transition-colors" style={{ color: 'white', caretColor: 'white' }}
         />
         <input
           type="password"
@@ -67,7 +61,7 @@ export function SignupPage({ onSignIn }: Props) {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm outline-none focus:border-zinc-500"
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-sm outline-none focus:border-brand placeholder:text-zinc-500 transition-colors" style={{ color: 'white', caretColor: 'white' }}
         />
         <input
           type="password"
@@ -75,23 +69,23 @@ export function SignupPage({ onSignIn }: Props) {
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           required
-          className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm outline-none focus:border-zinc-500"
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-sm outline-none focus:border-brand placeholder:text-zinc-500 transition-colors" style={{ color: 'white', caretColor: 'white' }}
         />
         {error && <p className="text-red-400 text-sm">{error}</p>}
         <button
           type="submit"
           disabled={loading}
-          className="bg-white text-zinc-950 rounded px-3 py-2 text-sm font-medium disabled:opacity-50"
+          className="bg-white hover:bg-zinc-100 text-black rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-50 transition-colors"
         >
-          {loading ? "..." : "Sign up"}
+          {loading ? "Creating account…" : "Get started free"}
         </button>
       </form>
-      <button
-        onClick={onSignIn}
-        className="text-zinc-500 text-sm hover:text-zinc-300 text-left"
-      >
-        Have an account? Sign in
-      </button>
-    </Shell>
+      <p className="text-zinc-500 text-sm">
+        Already have an account?{" "}
+        <Link to="/login" className="text-zinc-300 hover:text-white">
+          Sign in
+        </Link>
+      </p>
+    </AuthShell>
   );
 }
