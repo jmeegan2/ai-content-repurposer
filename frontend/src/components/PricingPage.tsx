@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { createCheckoutSession, createTopupSession, createPortalSession } from "../api";
+import { createCheckoutSession, createTopupSession, createPortalSession, getCredits } from "../api";
 import { useSession } from "../lib/auth";
 
 const PRO_FEATURES = [
@@ -23,9 +23,14 @@ export function PricingPage() {
   const [loadingTopup, setLoadingTopup] = useState(false);
   const [loadingPortal, setLoadingPortal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSubscribed, setIsSubscribed] = useState(false);
 
-  const subscriptionStatus = session?.user?.user_metadata?.subscription_status;
-  const isSubscribed = subscriptionStatus === "active";
+  useEffect(() => {
+    if (!session) return;
+    getCredits()
+      .then((data) => setIsSubscribed(data.subscriptionStatus === "active"))
+      .catch(() => {});
+  }, [session?.user.id]);
 
   async function handleUpgrade() {
     const email = session?.user.email;
@@ -119,12 +124,22 @@ export function PricingPage() {
               border: "1px solid rgba(103,35,255,0.3)",
             }}
           >
-            <div>
-              <p className="text-brand text-xs uppercase tracking-wider font-semibold">Pro</p>
-              <p className="text-5xl font-bold mt-2">
-                $9.99
-                <span className="text-lg font-normal text-zinc-500">/mo</span>
-              </p>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-brand text-xs uppercase tracking-wider font-semibold">Pro</p>
+                <p className="text-5xl font-bold mt-2">
+                  $9.99
+                  <span className="text-lg font-normal text-zinc-500">/mo</span>
+                </p>
+              </div>
+              {isSubscribed && (
+                <span
+                  className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                  style={{ background: "rgba(103,35,255,0.15)", color: "#a78bfa" }}
+                >
+                  Active
+                </span>
+              )}
             </div>
             <ul className="flex flex-col gap-2.5 text-sm text-zinc-300">
               {PRO_FEATURES.map((f) => (
@@ -137,7 +152,7 @@ export function PricingPage() {
               <button
                 onClick={handleManageBilling}
                 disabled={loadingPortal}
-                className="mt-auto w-full bg-white hover:bg-zinc-100 text-black text-sm font-semibold py-3 rounded-xl transition-colors disabled:opacity-50"
+                className="mt-auto w-full border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white text-sm font-semibold py-3 rounded-xl transition-colors disabled:opacity-50"
               >
                 {loadingPortal ? "Redirecting…" : "Manage Billing"}
               </button>
