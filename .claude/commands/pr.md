@@ -1,7 +1,7 @@
 # PR Workflow
 
 ## Goal
-Create a pull request against `main` on origin. DEVLOG.md is updated and committed **before** the PR is created so it's included.
+Create a pull request against `main` on origin.
 
 ---
 
@@ -19,7 +19,7 @@ Run these in parallel:
 - `git log main..HEAD` — see commits on this branch vs main
 
 ### 3. Commit and push
-Run `/commit` — this stages relevant files (including the DEVLOG update), commits, and pushes to the current branch.
+Run `/commit` — this stages and commits any uncommitted changes, then pushes to the current branch.
 
 ### 4. Run an AI review
 Run `/review` on the branch changes. Use only the **key findings** section or a short bullet summary — do not paste a full breakdown. Embed the condensed output in the PR body.
