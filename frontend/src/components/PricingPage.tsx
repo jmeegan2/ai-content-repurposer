@@ -1,20 +1,36 @@
-import { useState } from "react";
-import { createCheckoutSession, createTopupSession, createPortalSession } from "../api";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { createCheckoutSession, createTopupSession, createPortalSession, getCredits } from "../api";
 import { useSession } from "../lib/auth";
 
-interface Props {
-  onBack: () => void;
-  subscriptionStatus?: string;
-}
+const PRO_FEATURES = [
+  "150 credits per month",
+  "Credits reset on renewal",
+  "9:16 crop + burned captions",
+  "YouTube Shorts ready",
+];
 
-export function PricingPage({ onBack, subscriptionStatus }: Props) {
+const TOPUP_FEATURES = [
+  "100 credits added instantly",
+  "No subscription required",
+  "Credits never expire",
+];
+
+export function PricingPage() {
   const session = useSession();
+  const navigate = useNavigate();
   const [loadingPro, setLoadingPro] = useState(false);
   const [loadingTopup, setLoadingTopup] = useState(false);
   const [loadingPortal, setLoadingPortal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSubscribed, setIsSubscribed] = useState(false);
 
-  const isSubscribed = subscriptionStatus === "active";
+  useEffect(() => {
+    if (!session) return;
+    getCredits()
+      .then((data) => setIsSubscribed(data.subscriptionStatus === "active"))
+      .catch(() => {});
+  }, [session?.user.id]);
 
   async function handleUpgrade() {
     const email = session?.user.email;
@@ -57,82 +73,127 @@ export function PricingPage({ onBack, subscriptionStatus }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
-      <div className="max-w-3xl mx-auto px-6 py-12 flex flex-col gap-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-tight">Pricing</h1>
+    <div className="min-h-screen bg-surface text-white antialiased">
+      {/* Nav */}
+      <nav className="sticky top-0 z-50 border-b border-zinc-800 bg-surface/90 backdrop-blur-md">
+        <div className="max-w-3xl mx-auto px-6 h-14 flex items-center justify-between">
+          <span className="font-bold text-base tracking-tight">ClipCraft</span>
           <button
-            onClick={onBack}
-            className="text-zinc-500 text-sm hover:text-zinc-300"
+            onClick={() => navigate(-1)}
+            className="text-zinc-500 hover:text-zinc-300 text-sm transition-colors"
           >
             ← Back
           </button>
         </div>
+      </nav>
 
-        <div className="flex flex-col sm:flex-row gap-4">
-          {/* Pro Subscription */}
-          <div className="border border-zinc-800 rounded-lg p-8 flex flex-col gap-6 flex-1">
-            <div>
-              <p className="text-sm text-zinc-400 uppercase tracking-wider">Pro</p>
-              <p className="text-4xl font-bold mt-1">
-                $9.99
-                <span className="text-lg font-normal text-zinc-400">/mo</span>
-              </p>
+      {/* Header */}
+      <section className="relative pt-14 pb-10 px-6 text-center overflow-hidden">
+        <div
+          aria-hidden
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[300px] pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(ellipse at 50% 0%, rgba(103,35,255,0.13) 0%, transparent 65%)",
+          }}
+        />
+        <p className="relative text-zinc-600 text-xs uppercase tracking-widest font-semibold mb-3">
+          Pricing
+        </p>
+        <h1
+          className="relative text-3xl sm:text-4xl font-bold tracking-tight"
+          style={{
+            background: "linear-gradient(175deg, #ffffff 40%, #71717a 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}
+        >
+          Start free. Scale as you grow.
+        </h1>
+      </section>
+
+      {/* Cards */}
+      <div className="max-w-3xl mx-auto px-6 pb-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {/* Pro */}
+          <div
+            className="rounded-2xl p-8 flex flex-col gap-6"
+            style={{
+              background:
+                "linear-gradient(140deg, rgba(103,35,255,0.12) 0%, #18181b 55%)",
+              border: "1px solid rgba(103,35,255,0.3)",
+            }}
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-brand text-xs uppercase tracking-wider font-semibold">Pro</p>
+                <p className="text-5xl font-bold mt-2">
+                  $9.99
+                  <span className="text-lg font-normal text-zinc-500">/mo</span>
+                </p>
+              </div>
+              {isSubscribed && (
+                <span
+                  className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                  style={{ background: "rgba(103,35,255,0.15)", color: "#a78bfa" }}
+                >
+                  Active
+                </span>
+              )}
             </div>
-
-            <ul className="flex flex-col gap-2 text-sm text-zinc-300">
-              <li>150 credits per month</li>
-              <li>Credits reset on renewal</li>
-              <li>9:16 crop + burned captions</li>
-              <li>TikTok, Reels &amp; Shorts ready</li>
+            <ul className="flex flex-col gap-2.5 text-sm text-zinc-300">
+              {PRO_FEATURES.map((f) => (
+                <li key={f} className="flex items-center gap-2">
+                  <span className="text-brand">✓</span> {f}
+                </li>
+              ))}
             </ul>
-
             {isSubscribed ? (
               <button
                 onClick={handleManageBilling}
                 disabled={loadingPortal}
-                className="bg-zinc-800 text-white font-medium py-2 px-4 rounded hover:bg-zinc-700 disabled:opacity-50"
+                className="mt-auto w-full border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white text-sm font-semibold py-3 rounded-xl transition-colors disabled:opacity-50"
               >
-                {loadingPortal ? "Redirecting..." : "Manage Billing"}
+                {loadingPortal ? "Redirecting…" : "Manage Billing"}
               </button>
             ) : (
               <button
                 onClick={handleUpgrade}
                 disabled={loadingPro}
-                className="bg-white text-zinc-950 font-medium py-2 px-4 rounded hover:bg-zinc-200 disabled:opacity-50"
+                className="mt-auto w-full bg-white hover:bg-zinc-100 text-black text-sm font-semibold py-3 rounded-xl transition-colors disabled:opacity-50"
               >
-                {loadingPro ? "Redirecting..." : "Upgrade"}
+                {loadingPro ? "Redirecting…" : "Upgrade"}
               </button>
             )}
           </div>
 
-          {/* Credits Top-up */}
-          <div className="border border-zinc-800 rounded-lg p-8 flex flex-col gap-6 flex-1">
+          {/* Top-up */}
+          <div className="bg-panel border border-zinc-800 rounded-2xl p-8 flex flex-col gap-6">
             <div>
-              <p className="text-sm text-zinc-400 uppercase tracking-wider">Top-up</p>
-              <p className="text-4xl font-bold mt-1">
+              <p className="text-zinc-500 text-xs uppercase tracking-wider font-semibold">Top-up</p>
+              <p className="text-5xl font-bold mt-2">
                 $7.99
-                <span className="text-lg font-normal text-zinc-400"> one-time</span>
+                <span className="text-lg font-normal text-zinc-500"> one-time</span>
               </p>
             </div>
-
-            <ul className="flex flex-col gap-2 text-sm text-zinc-300">
-              <li>100 credits added instantly</li>
-              <li>No subscription required</li>
-              <li>Credits never expire</li>
+            <ul className="flex flex-col gap-2.5 text-sm text-zinc-400">
+              {TOPUP_FEATURES.map((f) => (
+                <li key={f} className="flex items-center gap-2">
+                  <span className="text-zinc-600">—</span> {f}
+                </li>
+              ))}
             </ul>
-
             <button
               onClick={handleTopup}
               disabled={loadingTopup}
-              className="bg-white text-zinc-950 font-medium py-2 px-4 rounded hover:bg-zinc-200 disabled:opacity-50"
+              className="mt-auto w-full bg-white hover:bg-zinc-100 text-black text-sm font-semibold py-3 rounded-xl transition-colors disabled:opacity-50"
             >
-              {loadingTopup ? "Redirecting..." : "Buy Credits"}
+              {loadingTopup ? "Redirecting…" : "Buy Credits"}
             </button>
           </div>
         </div>
 
-        {error && <p className="text-red-400 text-sm">{error}</p>}
+        {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
       </div>
     </div>
   );

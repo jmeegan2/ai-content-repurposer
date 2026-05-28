@@ -1,14 +1,11 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { EMAIL_ENABLED } from "../lib/config";
 
 type View = "signin" | "forgot" | "forgot-sent";
 
-interface Props {
-  onSignUp: () => void;
-}
-
-export function LoginPage({ onSignUp }: Props) {
+export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [view, setView] = useState<View>("signin");
@@ -41,23 +38,23 @@ export function LoginPage({ onSignUp }: Props) {
 
   if (view === "forgot-sent") {
     return (
-      <Shell>
+      <AuthShell>
         <p className="text-zinc-300 text-sm">
           Password reset email sent to <span className="text-white">{email}</span>. Check your inbox.
         </p>
         <button
           onClick={() => setView("signin")}
-          className="text-zinc-500 text-sm hover:text-zinc-300"
+          className="text-zinc-500 text-sm hover:text-zinc-300 text-left"
         >
           Back to sign in
         </button>
-      </Shell>
+      </AuthShell>
     );
   }
 
   if (view === "forgot") {
     return (
-      <Shell>
+      <AuthShell>
         <form onSubmit={handleForgot} className="flex flex-col gap-3">
           <input
             type="email"
@@ -65,29 +62,29 @@ export function LoginPage({ onSignUp }: Props) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm outline-none focus:border-zinc-500"
+            className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-sm outline-none focus:border-brand placeholder:text-zinc-500 transition-colors" style={{ color: 'white', caretColor: 'white' }}
           />
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <button
             type="submit"
             disabled={loading}
-            className="bg-white text-zinc-950 rounded px-3 py-2 text-sm font-medium disabled:opacity-50"
+            className="bg-white hover:bg-zinc-100 text-black rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-50 transition-colors"
           >
-            {loading ? "..." : "Send reset link"}
+            {loading ? "Sending…" : "Send reset link"}
           </button>
         </form>
         <button
           onClick={() => { setView("signin"); setError(null); }}
-          className="text-zinc-500 text-sm hover:text-zinc-300"
+          className="text-zinc-500 text-sm hover:text-zinc-300 text-left"
         >
           Back to sign in
         </button>
-      </Shell>
+      </AuthShell>
     );
   }
 
   return (
-    <Shell>
+    <AuthShell>
       <form onSubmit={handleSignIn} className="flex flex-col gap-3">
         <input
           type="email"
@@ -95,7 +92,7 @@ export function LoginPage({ onSignUp }: Props) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm outline-none focus:border-zinc-500"
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-sm outline-none focus:border-brand placeholder:text-zinc-500 transition-colors" style={{ color: 'white', caretColor: 'white' }}
         />
         <input
           type="password"
@@ -103,15 +100,15 @@ export function LoginPage({ onSignUp }: Props) {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm outline-none focus:border-zinc-500"
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-sm outline-none focus:border-brand placeholder:text-zinc-500 transition-colors" style={{ color: 'white', caretColor: 'white' }}
         />
         {error && <p className="text-red-400 text-sm">{error}</p>}
         <button
           type="submit"
           disabled={loading}
-          className="bg-white text-zinc-950 rounded px-3 py-2 text-sm font-medium disabled:opacity-50"
+          className="bg-white hover:bg-zinc-100 text-black rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-50 transition-colors"
         >
-          {loading ? "..." : "Sign in"}
+          {loading ? "Signing in…" : "Sign in"}
         </button>
       </form>
       <div className="flex flex-col gap-2">
@@ -123,23 +120,27 @@ export function LoginPage({ onSignUp }: Props) {
             Forgot password?
           </button>
         )}
-        <button
-          onClick={onSignUp}
-          className="text-zinc-500 text-sm hover:text-zinc-300 text-left"
-        >
-          No account? Sign up
-        </button>
+        <p className="text-zinc-500 text-sm">
+          No account?{" "}
+          <Link to="/signup" className="text-zinc-300 hover:text-white">
+            Sign up
+          </Link>
+        </p>
       </div>
-    </Shell>
+    </AuthShell>
   );
 }
 
-export function Shell({ children }: { children: React.ReactNode }) {
+export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
-      <div className="w-full max-w-sm px-6 flex flex-col gap-6">
-        <h1 className="text-2xl font-semibold tracking-tight">AI Repurposer</h1>
-        {children}
+    <div className="min-h-screen bg-surface text-white flex items-center justify-center px-4">
+      <div className="w-full max-w-sm flex flex-col gap-6">
+        <Link to="/" className="flex items-center gap-2 mb-2">
+          <span className="text-xl font-bold tracking-tight">ClipCraft</span>
+        </Link>
+        <div className="bg-panel border border-zinc-800 rounded-2xl p-8 flex flex-col gap-6">
+          {children}
+        </div>
       </div>
     </div>
   );
