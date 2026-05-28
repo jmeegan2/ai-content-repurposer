@@ -140,7 +140,7 @@ export function ClipCard({ clip, onClipUpdate }: Props) {
       <button
         onClick={handleUploadClick}
         disabled={uiState === "checking"}
-        className="mt-1 flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-60 text-zinc-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors w-full"
+        className="mt-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors w-full"
       >
         {uiState === "checking" ? (
           <>
@@ -231,7 +231,7 @@ export function ClipCard({ clip, onClipUpdate }: Props) {
               href={clip.s3Url}
               target="_blank"
               rel="noreferrer"
-              className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
+              className="bg-white hover:bg-zinc-100 text-black text-sm font-medium px-4 py-2 rounded-lg transition-colors text-center"
             >
               Download MP4
             </a>
