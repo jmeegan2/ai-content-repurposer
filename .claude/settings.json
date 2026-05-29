@@ -24,7 +24,8 @@
       "Read",
       "Bash(ls*)",
       "Bash(find*)",
-      "Bash(cat*)"
+      "Bash(cat*)",
+      "Bash(cd *)"
     ]
   }
 }

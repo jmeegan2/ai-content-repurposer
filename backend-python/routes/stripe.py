@@ -18,8 +18,27 @@ from services.supabase_client import supabase
 
 logger = logging.getLogger(__name__)
 
-# IMPORTANT: Stripe webhook payloads are StripeObjects, not plain dicts.
-# StripeObject has no .get() method — use [] for required fields, and "key" in obj before [] for optional fields.
+# NOTE: Webhook payloads are StripeObjects — use [] not .get()
+# WARNING: Claude will hallucinate Stripe field names — always verify against the docs links below.
+# Claude can fetch them directly by appending ".md" to any link (e.g. WebFetch url.md).
+#
+# Event                            Object        Docs
+# -------------------------------- ------------- ------------------------------------------------
+# checkout.session.completed       Session       https://docs.stripe.com/api/checkout/sessions/object
+#   metadata.type = "topup"        → add 100 credits
+#   metadata.type = "subscription" → set active, reset credits
+#
+# invoice.payment_succeeded        Invoice       https://docs.stripe.com/api/invoices/object
+#   billing_reason = "subscription_cycle" → reset credits (others skipped)
+#
+# customer.subscription.updated    Subscription  https://docs.stripe.com/api/subscriptions/object
+#   status = active | paused | past_due | ...
+#
+# customer.subscription.deleted    Subscription  (same object, always → inactive)
+#
+# charge.refunded                  Charge        https://docs.stripe.com/api/charges/object
+#   metadata.type = "topup"        → claw back 100 credits
+#   else                           → inactive + zero credits
 
 webhook_router = APIRouter()
 router = APIRouter()
