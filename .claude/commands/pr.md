@@ -18,14 +18,11 @@ Run these in parallel:
 - `git status` — see uncommitted changes
 - `git log main..HEAD` — see commits on this branch vs main
 
-### 3. Commit and push
+### 2. Commit and push
 Run `/commit` — this stages and commits any uncommitted changes, then pushes to the current branch.
 
-### 4. Run an AI review
-Run `/review` on the branch changes. Use only the **key findings** section or a short bullet summary — do not paste a full breakdown. Embed the condensed output in the PR body.
-
-### 5. Create the PR
-Use this exact format, inserting the `/review` output under `## AI Review`:
+### 3. Create the PR
+Use this exact format:
 ```bash
 gh pr create --base main --reviewer jmeegan2 --title "..." --body "$(cat <<'EOF'
 ## Summary
@@ -33,9 +30,6 @@ gh pr create --base main --reviewer jmeegan2 --title "..." --body "$(cat <<'EOF'
 
 ## Test plan
 - ...
-
-## AI Review
-<insert /review output here>
 
 🤖 Generated with Claude Code
 EOF
@@ -45,4 +39,5 @@ EOF
 - Summary: what was built and why
 - Test plan: bulleted checklist of what to verify
 
-### 6. Return the PR URL
+
+### 5. Return the PR URL

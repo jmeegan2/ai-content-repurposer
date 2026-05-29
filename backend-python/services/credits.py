@@ -3,10 +3,11 @@ from fastapi import HTTPException
 
 
 def get_profile(supabase, user_id: str) -> dict:
-    resp = supabase.table("profiles").select("credits_remaining, credits_used, subscription_status").eq("id", user_id).single().execute()
-    if not resp.data:
+    try:
+        resp = supabase.table("profiles").select("credits_remaining, credits_used, subscription_status").eq("id", user_id).single().execute()
+        return resp.data
+    except Exception:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return resp.data
 
 
 def check_credits(supabase, user_id: str, amount: int) -> None:
