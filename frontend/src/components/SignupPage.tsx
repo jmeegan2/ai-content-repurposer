@@ -34,7 +34,7 @@ export function SignupPage() {
       <AuthShell>
         <p className="text-zinc-300 text-sm">
           {EMAIL_ENABLED
-            ? "Check your inbox for a confirmation link. If you don't see it, you may already have an account — try signing in instead."
+            ? "Check your inbox for a confirmation link."
             : "Account created! You can now sign in."}
         </p>
         <Link to="/login" className="text-zinc-500 text-sm hover:text-zinc-300">
@@ -77,7 +77,7 @@ export function SignupPage() {
           disabled={loading}
           className="bg-white hover:bg-zinc-100 text-black rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-50 transition-colors"
         >
-          {loading ? "Creating account…" : "Get started free"}
+          {loading ? "Creating account…" : "Sign up"}
         </button>
       </form>
       <p className="text-zinc-500 text-sm">
