@@ -1,1 +1,1 @@
-export const EMAIL_ENABLED = false;
+export const EMAIL_ENABLED = true;
