@@ -39,7 +39,5 @@ EOF
 - Summary: what was built and why
 - Test plan: bulleted checklist of what to verify
 
-### 4. Run automatic code review
-After the PR is created, immediately run `/code-review high --comment` — this reviews the diff and posts findings as inline PR comments without any user input. Do not wait for the user to ask.
 
 ### 5. Return the PR URL
