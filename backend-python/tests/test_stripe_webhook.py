@@ -239,7 +239,7 @@ class TestHandleCheckoutSessionCompleted:
 class TestHandleInvoicePaymentSucceeded:
     def test_subscription_cycle_resets_credits(self):
         supabase, _, _ = _make_supabase()
-        invoice = {"billing_reason": "subscription_cycle", "customer": "cus_1"}
+        invoice = {"id": "in_test", "billing_reason": "subscription_cycle", "customer": "cus_1"}
         with patch("routes.stripe.supabase", supabase), \
              patch("routes.stripe.reset_monthly_credits") as mock_reset:
             _handle_invoice_payment_succeeded(invoice)
@@ -253,7 +253,7 @@ class TestHandleInvoicePaymentSucceeded:
         mock_reset.assert_called_once_with(supabase, "user-1")
 
     def test_non_renewal_does_nothing(self):
-        invoice = {"billing_reason": "subscription_create", "customer": "cus_1"}
+        invoice = {"id": "in_test", "billing_reason": "subscription_create", "customer": "cus_1"}
         with patch("routes.stripe.reset_monthly_credits") as mock_reset:
             _handle_invoice_payment_succeeded(invoice)
         mock_reset.assert_not_called()
@@ -262,7 +262,7 @@ class TestHandleInvoicePaymentSucceeded:
 class TestHandleSubscriptionUpdated:
     def test_sets_status(self):
         supabase, _, profiles_table = _make_supabase()
-        sub = {"customer": "cus_1", "status": "past_due"}
+        sub = {"id": "sub_test", "customer": "cus_1", "status": "past_due"}
         with patch("routes.stripe.supabase", supabase):
             _handle_subscription_updated(sub, NOW)
         profiles_table.update.assert_called_once()
@@ -279,7 +279,7 @@ class TestHandleSubscriptionUpdated:
 class TestHandleSubscriptionDeleted:
     def test_sets_inactive(self):
         supabase, _, profiles_table = _make_supabase()
-        sub = {"customer": "cus_1"}
+        sub = {"id": "sub_test", "customer": "cus_1"}
         with patch("routes.stripe.supabase", supabase):
             _handle_subscription_deleted(sub, NOW)
         profiles_table.update.assert_called_once()
@@ -289,7 +289,7 @@ class TestHandleSubscriptionDeleted:
 class TestHandleChargeRefunded:
     def test_subscription_refund_zeroes_credits(self):
         supabase, _, profiles_table = _make_supabase(credits_remaining=150)
-        charge = {"customer": "cus_1", "invoice": "in_1", "metadata": {}}
+        charge = {"id": "ch_test", "customer": "cus_1", "invoice": "in_1", "metadata": {}}
         with patch("routes.stripe.supabase", supabase):
             _handle_charge_refunded(charge, NOW)
         update_data = profiles_table.update.call_args[0][0]
@@ -298,21 +298,21 @@ class TestHandleChargeRefunded:
 
     def test_topup_refund_claws_back_100(self):
         supabase, _, profiles_table = _make_supabase(credits_remaining=200)
-        charge = {"customer": "cus_1", "invoice": None, "metadata": {"type": "topup"}}
+        charge = {"id": "ch_test", "customer": "cus_1", "invoice": None, "metadata": {"type": "topup"}}
         with patch("routes.stripe.supabase", supabase):
             _handle_charge_refunded(charge, NOW)
         assert profiles_table.update.call_args[0][0]["credits_remaining"] == 100
 
     def test_topup_refund_floors_at_zero(self):
         supabase, _, profiles_table = _make_supabase(credits_remaining=50)
-        charge = {"customer": "cus_1", "invoice": None, "metadata": {"type": "topup"}}
+        charge = {"id": "ch_test", "customer": "cus_1", "invoice": None, "metadata": {"type": "topup"}}
         with patch("routes.stripe.supabase", supabase):
             _handle_charge_refunded(charge, NOW)
         assert profiles_table.update.call_args[0][0]["credits_remaining"] == 0
 
     def test_no_customer_does_nothing(self):
         supabase, _, profiles_table = _make_supabase()
-        charge = {"customer": None, "invoice": None}
+        charge = {"id": "ch_test", "customer": None, "invoice": None}
         with patch("routes.stripe.supabase", supabase):
             _handle_charge_refunded(charge, NOW)
         profiles_table.update.assert_not_called()
