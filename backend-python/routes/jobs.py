@@ -185,7 +185,7 @@ def get_job(job_id: str, user_id: str = Depends(require_auth)) -> Job:
     if not job_resp.data:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    clip_resp = supabase.table("clips").select("*").eq("job_id", job_id).execute()
+    clip_resp = supabase.table("clips").select("*").eq("job_id", job_id).order("start_time", desc=False).execute()
     clips = [_db_clip_to_clip(row) for row in (clip_resp.data or [])]
 
     if job_resp.data["status"] == "done" and clips:
@@ -216,6 +216,7 @@ def list_jobs(user_id: str = Depends(require_auth)) -> list[Job]:
             supabase.table("clips")
             .select("*")
             .in_("job_id", done_job_ids)
+            .order("start_time", desc=False)
             .execute()
         )
         for row in clips_resp.data or []:

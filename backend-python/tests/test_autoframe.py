@@ -17,6 +17,9 @@ from services import autoframe
 _FFMPEG = os.environ.get("FFMPEG_PATH", "/opt/homebrew/bin/ffmpeg")
 _MEDIA_DIR = os.path.join(os.path.dirname(__file__), "media for testing")
 
+import pytest
+
+@pytest.mark.skip(reason="requires test media file")
 def test_autoframe():
     video_path = os.path.join(_MEDIA_DIR, "huberman-1min.mp4")
     framed_path = os.path.join(_MEDIA_DIR, "huberman-1min-framed.mp4")
