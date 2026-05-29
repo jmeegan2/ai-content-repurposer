@@ -39,7 +39,7 @@ export function useUpload(onJobCreated: (job: Job) => void) {
       onJobCreated(newJob);
     } catch (err) {
       const aborted = err instanceof Error && err.message === "upload_aborted";
-      if (aborted && jobId) await cancelJob(jobId).catch(() => {});
+      if (jobId) await cancelJob(jobId).catch(() => {});
       if (!aborted) setError(err instanceof Error ? err.message : "Something went wrong");
       setAbortUpload(null);
       setUploadProgress(null);
@@ -47,6 +47,7 @@ export function useUpload(onJobCreated: (job: Job) => void) {
       setSubmitting(false);
     }
   }
+
 
   return { submit, submitting, uploadProgress, abortUpload, error, clearError: () => setError(null) };
 }
