@@ -59,5 +59,6 @@ def create_topup_checkout_session(customer_id: str, user_id: str) -> str:
         success_url=f"{_FRONTEND_URL}/?topup=success",
         cancel_url=f"{_FRONTEND_URL}/",
         metadata={"userId": user_id, "type": "topup"},
+        payment_intent_data={"metadata": {"type": "topup"}},
     )
     return session.url

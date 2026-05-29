@@ -18,6 +18,28 @@ from services.supabase_client import supabase
 
 logger = logging.getLogger(__name__)
 
+# NOTE: Webhook payloads are StripeObjects — use [] not .get()
+# WARNING: Claude will hallucinate Stripe field names — always verify against the docs links below.
+# Claude can fetch them directly by appending ".md" to any link (e.g. WebFetch url.md).
+#
+# Event                            Object        Docs
+# -------------------------------- ------------- ------------------------------------------------
+# checkout.session.completed       Session       https://docs.stripe.com/api/checkout/sessions/object
+#   metadata.type = "topup"        → add 100 credits
+#   metadata.type = "subscription" → set active, reset credits
+#
+# invoice.payment_succeeded        Invoice       https://docs.stripe.com/api/invoices/object
+#   billing_reason = "subscription_cycle" → reset credits (others skipped)
+#
+# customer.subscription.updated    Subscription  https://docs.stripe.com/api/subscriptions/object
+#   status = active | paused | past_due | ...
+#
+# customer.subscription.deleted    Subscription  (same object, always → inactive)
+#
+# charge.refunded                  Charge        https://docs.stripe.com/api/charges/object
+#   metadata.type = "topup"        → claw back 100 credits
+#   else                           → inactive + zero credits
+
 webhook_router = APIRouter()
 router = APIRouter()
 
@@ -42,7 +64,6 @@ def _is_duplicate_event(event_id: str) -> bool:
 
 def _handle_checkout_session_completed(session, now: str) -> None:
     try:
-        # Stripe metadata is a StripeObject, not a normal dict — use [] access, not .get()
         metadata = session["metadata"] or {}
         user_id = metadata["userId"]
 
@@ -91,6 +112,10 @@ def _handle_subscription_deleted(sub: dict, now: str) -> None:
 
 
 def _handle_charge_refunded(charge, now: str) -> None:
+    """
+    will come back to this later and change it to so we have a table for payments and can easily refund charges instead of using a metadata hack
+    """
+    
     customer_id = charge["customer"]
     if not customer_id:
         return
@@ -98,18 +123,18 @@ def _handle_charge_refunded(charge, now: str) -> None:
     if not profile.data:
         return
     user_id = profile.data["id"]
-    if charge["invoice"]:
-        # Subscription refund — revoke subscription and zero out credits.
-        supabase.table("profiles").update({
-            "subscription_status": "inactive",
-            "credits_remaining": 0,
-            "updated_at": now,
-        }).eq("id", user_id).execute()
-    else:
+    if "type" in charge["metadata"] and charge["metadata"]["type"] == "topup":
         # Top-up refund — claw back 100 credits (floor at 0).
         new_credits = max(0, profile.data["credits_remaining"] - 100)
         supabase.table("profiles").update({
             "credits_remaining": new_credits,
+            "updated_at": now,
+        }).eq("id", user_id).execute()
+    else:
+        # Subscription refund — revoke subscription and zero out credits.
+        supabase.table("profiles").update({
+            "subscription_status": "inactive",
+            "credits_remaining": 0,
             "updated_at": now,
         }).eq("id", user_id).execute()
 
