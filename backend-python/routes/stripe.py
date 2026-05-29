@@ -57,6 +57,7 @@ def _profile_by_customer(customer_id: str):
 def _is_duplicate_event(event_id: str) -> bool:
     existing = supabase.table("stripe_webhook_events").select("event_id").eq("event_id", event_id).execute()
     if existing.data:
+        logger.info("Duplicate Stripe event skipped event_id=%s", event_id)
         return True
     supabase.table("stripe_webhook_events").insert({"event_id": event_id}).execute()
     return False
@@ -68,9 +69,11 @@ def _handle_checkout_session_completed(session, now: str) -> None:
         user_id = metadata["userId"]
 
         if "type" in metadata and metadata["type"] == "topup":
+            logger.info("checkout.session.completed topup user_id=%s session_id=%s", user_id, session["id"])
             add_credits(supabase, user_id, 100)
             return
 
+        logger.info("checkout.session.completed subscription user_id=%s session_id=%s", user_id, session["id"])
         supabase.table("profiles").upsert({
             "id": user_id,
             "subscription_status": "active",
@@ -88,55 +91,73 @@ def _handle_checkout_session_completed(session, now: str) -> None:
 def _handle_invoice_payment_succeeded(invoice) -> None:
     # Only reset on subscription renewals; initial charge is covered by checkout.session.completed.
     if invoice["billing_reason"] != "subscription_cycle":
+        logger.debug("invoice.payment_succeeded skipped billing_reason=%s invoice_id=%s", invoice["billing_reason"], invoice["id"])
         return
     customer_id = _customer_id(invoice["customer"])
+    logger.info("invoice.payment_succeeded subscription_cycle customer_id=%s invoice_id=%s", customer_id, invoice["id"])
     profile = supabase.table("profiles").select("id").eq("stripe_customer_id", customer_id).single().execute()
     if profile.data:
         reset_monthly_credits(supabase, profile.data["id"])
+    else:
+        logger.warning("invoice.payment_succeeded no profile found for customer_id=%s", customer_id)
 
 
 def _handle_subscription_updated(sub: dict, now: str) -> None:
     customer_id = _customer_id(sub["customer"])
-    supabase.table("profiles").update({
-        "subscription_status": sub["status"],
-        "updated_at": now,
-    }).eq("stripe_customer_id", customer_id).execute()
+    logger.info("customer.subscription.updated customer_id=%s status=%s sub_id=%s", customer_id, sub["status"], sub["id"])
+    try:
+        supabase.table("profiles").update({
+            "subscription_status": sub["status"],
+            "updated_at": now,
+        }).eq("stripe_customer_id", customer_id).execute()
+    except Exception:
+        logger.exception("Error handling customer.subscription.updated sub_id=%s", sub["id"])
 
 
 def _handle_subscription_deleted(sub: dict, now: str) -> None:
     customer_id = _customer_id(sub["customer"])
-    supabase.table("profiles").update({
-        "subscription_status": "inactive",
-        "updated_at": now,
-    }).eq("stripe_customer_id", customer_id).execute()
+    logger.info("customer.subscription.deleted customer_id=%s sub_id=%s", customer_id, sub["id"])
+    try:
+        supabase.table("profiles").update({
+            "subscription_status": "inactive",
+            "updated_at": now,
+        }).eq("stripe_customer_id", customer_id).execute()
+    except Exception:
+        logger.exception("Error handling customer.subscription.deleted sub_id=%s", sub["id"])
 
 
 def _handle_charge_refunded(charge, now: str) -> None:
     """
     will come back to this later and change it to so we have a table for payments and can easily refund charges instead of using a metadata hack
     """
-    
     customer_id = charge["customer"]
     if not customer_id:
+        logger.warning("charge.refunded missing customer charge_id=%s", charge["id"])
         return
     profile = _profile_by_customer(_customer_id(customer_id))
     if not profile.data:
+        logger.warning("charge.refunded no profile found customer_id=%s charge_id=%s", customer_id, charge["id"])
         return
     user_id = profile.data["id"]
-    if "type" in charge["metadata"] and charge["metadata"]["type"] == "topup":
-        # Top-up refund — claw back 100 credits (floor at 0).
-        new_credits = max(0, profile.data["credits_remaining"] - 100)
-        supabase.table("profiles").update({
-            "credits_remaining": new_credits,
-            "updated_at": now,
-        }).eq("id", user_id).execute()
-    else:
-        # Subscription refund — revoke subscription and zero out credits.
-        supabase.table("profiles").update({
-            "subscription_status": "inactive",
-            "credits_remaining": 0,
-            "updated_at": now,
-        }).eq("id", user_id).execute()
+    try:
+        if "type" in charge["metadata"] and charge["metadata"]["type"] == "topup":
+            # Top-up refund — claw back 100 credits (floor at 0).
+            new_credits = max(0, profile.data["credits_remaining"] - 100)
+            logger.info("charge.refunded topup clawback user_id=%s new_credits=%d charge_id=%s", user_id, new_credits, charge["id"])
+            supabase.table("profiles").update({
+                "credits_remaining": new_credits,
+                "updated_at": now,
+            }).eq("id", user_id).execute()
+        else:
+            # Subscription refund — revoke subscription and zero out credits.
+            logger.info("charge.refunded subscription revoke user_id=%s charge_id=%s", user_id, charge["id"])
+            supabase.table("profiles").update({
+                "subscription_status": "inactive",
+                "credits_remaining": 0,
+                "updated_at": now,
+            }).eq("id", user_id).execute()
+    except Exception:
+        logger.exception("Error handling charge.refunded charge_id=%s", charge["id"])
 
 
 @webhook_router.post("/webhook")
@@ -151,6 +172,8 @@ async def stripe_webhook(request: Request) -> dict:
         event = stripe.Webhook.construct_event(payload, sig, _WEBHOOK_SECRET)
     except stripe.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid signature")
+
+    logger.info("Stripe webhook received event_type=%s event_id=%s", event["type"], event["id"])
 
     if _is_duplicate_event(event["id"]):
         return {"received": True}
@@ -168,6 +191,8 @@ async def stripe_webhook(request: Request) -> dict:
         _handle_subscription_deleted(obj, now)
     elif event["type"] == "charge.refunded":
         _handle_charge_refunded(obj, now)
+    else:
+        logger.debug("Stripe webhook unhandled event_type=%s event_id=%s", event["type"], event["id"])
 
     return {"received": True}
 
