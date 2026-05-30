@@ -7,6 +7,7 @@ import { JobSection } from "../components/JobSection";
 import { useSession } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 import { useUpload } from "../hooks/useUpload";
+import { dashboardSubscriptionAction } from "../subscriptionStatus";
 
 const TERMINAL = new Set(["done", "failed", "cancelled"]);
 
@@ -32,6 +33,7 @@ function ClipCardSkeleton() {
 
 export function DashboardPage() {
   const session = useSession();
+  const userId = session?.user.id;
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
@@ -42,22 +44,43 @@ export function DashboardPage() {
   );
 
   useEffect(() => {
-    if (!session) return;
-    setLoadingJobs(true);
-    getJobs()
-      .then(setJobs)
-      .catch(() => {})
-      .finally(() => setLoadingJobs(false));
-    getCredits()
-      .then((data) => {
-        setSubscriptionStatus(data.subscriptionStatus);
-        setCreditsRemaining(data.creditsRemaining);
-      })
-      .catch(() => {});
-  }, [session?.user.id]);
+    if (!userId) return;
+    let cancelled = false;
 
-  const activeIds = jobs.filter(isActive).map((j) => j.id);
+    async function loadDashboard() {
+      setLoadingJobs(true);
+      try {
+        const nextJobs = await getJobs();
+        if (!cancelled) setJobs(nextJobs);
+      } catch {
+        if (!cancelled) setJobs([]);
+      } finally {
+        if (!cancelled) setLoadingJobs(false);
+      }
+
+      try {
+        const data = await getCredits();
+        if (!cancelled) {
+          setSubscriptionStatus(data.subscriptionStatus);
+          setCreditsRemaining(data.creditsRemaining);
+        }
+      } catch {
+        return;
+      }
+    }
+
+    loadDashboard();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const activeIdsKey = jobs
+    .filter(isActive)
+    .map((j) => j.id)
+    .join(",");
   useEffect(() => {
+    const activeIds = activeIdsKey ? activeIdsKey.split(",") : [];
     if (activeIds.length === 0) return;
     const interval = setInterval(async () => {
       let shouldRefreshCredits = false;
@@ -69,7 +92,9 @@ export function DashboardPage() {
             if (updated.status === "done" || updated.status === "failed") {
               shouldRefreshCredits = true;
             }
-          } catch {}
+          } catch {
+            return;
+          }
         }),
       );
       if (shouldRefreshCredits) {
@@ -78,11 +103,11 @@ export function DashboardPage() {
             setSubscriptionStatus(data.subscriptionStatus);
             setCreditsRemaining(data.creditsRemaining);
           })
-          .catch(() => {});
+          .catch(() => undefined);
       }
     }, 2000);
     return () => clearInterval(interval);
-  }, [activeIds.join(",")]);
+  }, [activeIdsKey]);
 
   function updateJob(updated: Job) {
     setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
@@ -95,7 +120,9 @@ export function DashboardPage() {
         prev.map((j) => (j.id === jobId ? { ...j, status: "cancelled" } : j))
       );
       getCredits().then((data) => setCreditsRemaining(data.creditsRemaining));
-    } catch {}
+    } catch {
+      return;
+    }
   }
 
   const isRunning = submitting || jobs.some((j) => !TERMINAL.has(j.status));
@@ -120,7 +147,7 @@ export function DashboardPage() {
                 onClick={() => navigate("/pricing")}
                 className="text-xs text-white font-medium bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg transition-colors"
               >
-                {subscriptionStatus === "active" ? "Add more credits" : "Upgrade"}
+                {dashboardSubscriptionAction(subscriptionStatus)}
               </button>
             )}
             <button

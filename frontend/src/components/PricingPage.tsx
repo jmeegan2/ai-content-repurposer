@@ -2,6 +2,11 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { createCheckoutSession, createTopupSession, createPortalSession, getCredits } from "../api";
 import { useSession } from "../lib/auth";
+import {
+  isActiveSubscription,
+  isPausedSubscription,
+  pricingSubscriptionBadge,
+} from "../subscriptionStatus";
 
 const PRO_FEATURES = [
   "150 credits per month",
@@ -18,19 +23,24 @@ const TOPUP_FEATURES = [
 
 export function PricingPage() {
   const session = useSession();
+  const userId = session?.user.id;
   const navigate = useNavigate();
   const [loadingPro, setLoadingPro] = useState(false);
   const [loadingTopup, setLoadingTopup] = useState(false);
   const [loadingPortal, setLoadingPortal] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    if (!session) return;
+    if (!userId) return;
     getCredits()
-      .then((data) => setIsSubscribed(data.subscriptionStatus === "active"))
+      .then((data) => setSubscriptionStatus(data.subscriptionStatus))
       .catch(() => {});
-  }, [session?.user.id]);
+  }, [userId]);
+
+  const isSubscribed = isActiveSubscription(subscriptionStatus);
+  const isPaused = isPausedSubscription(subscriptionStatus);
+  const subscriptionBadge = pricingSubscriptionBadge(subscriptionStatus);
 
   async function handleUpgrade() {
     const email = session?.user.email;
@@ -132,12 +142,12 @@ export function PricingPage() {
                   <span className="text-lg font-normal text-zinc-500">/mo</span>
                 </p>
               </div>
-              {isSubscribed && (
+              {subscriptionBadge && (
                 <span
                   className="text-xs font-semibold px-2.5 py-1 rounded-full"
                   style={{ background: "rgba(103,35,255,0.15)", color: "#a78bfa" }}
                 >
-                  Active
+                  {subscriptionBadge}
                 </span>
               )}
             </div>
@@ -148,13 +158,13 @@ export function PricingPage() {
                 </li>
               ))}
             </ul>
-            {isSubscribed ? (
+            {isSubscribed || isPaused ? (
               <button
                 onClick={handleManageBilling}
                 disabled={loadingPortal}
                 className="mt-auto w-full border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white text-sm font-semibold py-3 rounded-xl transition-colors disabled:opacity-50"
               >
-                {loadingPortal ? "Redirecting…" : "Manage Billing"}
+                {loadingPortal ? "Redirecting…" : isPaused ? "Resume Billing" : "Manage Billing"}
               </button>
             ) : (
               <button
