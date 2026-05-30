@@ -23,7 +23,7 @@ const ClipMedia = memo(function ClipMedia({
   return (
     <div className="aspect-[9/16] bg-zinc-950 overflow-hidden relative">
       {playing && s3Url ? (
-        <video src={s3Url} autoPlay controls className="w-full h-full object-cover" />
+        <video src={s3Url} autoPlay controls className="w-full h-full object-contain" />
       ) : (
         <>
           {thumbnailUrl ? (
