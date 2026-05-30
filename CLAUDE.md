@@ -118,7 +118,6 @@ All API routes use `middleware/auth.py:require_auth` as a FastAPI dependency. It
 
 **Known bugs (not yet fixed):**
 - `deduct_credits` has a race condition — two concurrent jobs could both pass the credit check
-- `charge.refunded` webhook event is unhandled
 
 ### Stripe
 
