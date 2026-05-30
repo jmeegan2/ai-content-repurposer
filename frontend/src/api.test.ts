@@ -8,7 +8,7 @@ vi.mock("./lib/supabase", () => ({
   },
 }));
 
-import { getJob, requestUploadUrl } from "./api";
+import { getJob, requestUploadUrl, getClipYoutubeStatus } from "./api";
 
 const mockJob = {
   id: "job-1",
@@ -85,5 +85,38 @@ describe("getJob", () => {
     await expect(
       getJob("550e8400-e29b-41d4-a716-446655440000"),
     ).rejects.toThrow("Failed to fetch job");
+  });
+});
+
+describe("getClipYoutubeStatus", () => {
+  it("returns youtubeUploadStatus and youtubeVideoId on success", async () => {
+    const payload = { youtubeUploadStatus: "uploaded", youtubeVideoId: "abc123" };
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(payload), { status: 200 }),
+    );
+
+    const result = await getClipYoutubeStatus("clip-1");
+    expect(result).toEqual(payload);
+  });
+
+  it("returns null fields when upload is still pending", async () => {
+    const payload = { youtubeUploadStatus: "pending", youtubeVideoId: null };
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(payload), { status: 200 }),
+    );
+
+    const result = await getClipYoutubeStatus("clip-1");
+    expect(result.youtubeUploadStatus).toBe("pending");
+    expect(result.youtubeVideoId).toBeNull();
+  });
+
+  it("throws on non-ok response", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response("", { status: 404 }),
+    );
+
+    await expect(getClipYoutubeStatus("clip-1")).rejects.toThrow(
+      "Failed to get clip YouTube status",
+    );
   });
 });

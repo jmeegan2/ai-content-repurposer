@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { Clip } from "../types";
 import { getYoutubeStatus, uploadClipToYoutube } from "../api";
 import { ConnectYoutubeModal } from "./ConnectYoutubeModal";
@@ -8,6 +8,60 @@ function formatTime(seconds: number): string {
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
+
+const ClipMedia = memo(function ClipMedia({
+  s3Url,
+  thumbnailUrl,
+  title,
+}: {
+  s3Url?: string;
+  thumbnailUrl?: string;
+  title: string;
+}) {
+  const [playing, setPlaying] = useState(false);
+
+  return (
+    <div className="aspect-[9/16] bg-zinc-950 overflow-hidden relative">
+      {playing && s3Url ? (
+        <video src={s3Url} autoPlay controls className="w-full h-full object-contain" />
+      ) : (
+        <>
+          {thumbnailUrl ? (
+            <img src={thumbnailUrl} alt={title} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <svg
+                className="w-10 h-10 text-zinc-700"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"
+                />
+              </svg>
+            </div>
+          )}
+          {s3Url && (
+            <button
+              onClick={() => setPlaying(true)}
+              className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/40 transition-colors group"
+            >
+              <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:bg-white/30 transition-colors">
+                <svg className="w-5 h-5 text-white translate-x-0.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+});
 
 interface Props {
   clip: Clip;
@@ -20,7 +74,6 @@ export function ClipCard({ clip, onClipUpdate }: Props) {
   const [title, setTitle] = useState(clip.title);
   const [description, setDescription] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [playing, setPlaying] = useState(false);
 
   const uploadStatus = clip.youtubeUploadStatus;
 
@@ -167,54 +220,7 @@ export function ClipCard({ clip, onClipUpdate }: Props) {
         <ConnectYoutubeModal onClose={() => setUiState("idle")} />
       )}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col">
-        <div className="aspect-[9/16] bg-zinc-950 overflow-hidden relative">
-          {playing && clip.s3Url ? (
-            <video
-              src={clip.s3Url}
-              autoPlay
-              controls
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <>
-              {clip.thumbnailUrl ? (
-                <img
-                  src={clip.thumbnailUrl}
-                  alt={clip.title}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <svg
-                    className="w-10 h-10 text-zinc-700"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"
-                    />
-                  </svg>
-                </div>
-              )}
-              {clip.s3Url && (
-                <button
-                  onClick={() => setPlaying(true)}
-                  className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/40 transition-colors group"
-                >
-                  <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:bg-white/30 transition-colors">
-                    <svg className="w-5 h-5 text-white translate-x-0.5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </div>
-                </button>
-              )}
-            </>
-          )}
-        </div>
+        <ClipMedia s3Url={clip.s3Url} thumbnailUrl={clip.thumbnailUrl} title={clip.title} />
         <div className="p-4 flex flex-col gap-3 flex-1">
           <p className="text-white text-sm font-medium leading-snug line-clamp-2">
             {clip.title}

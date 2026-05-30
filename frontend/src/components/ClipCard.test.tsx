@@ -62,4 +62,46 @@ describe("ClipCard", () => {
     const link = screen.getByRole("link", { name: /download mp4/i });
     expect(link).toHaveAttribute("href", "https://s3.example.com/clip.mp4");
   });
+
+  it("shows upload to youtube button when s3Url is present and no upload status", () => {
+    render(
+      <ClipCard
+        clip={{ ...baseClip, s3Url: "https://s3.example.com/clip.mp4" }}
+        onClipUpdate={onClipUpdate}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /upload to youtube/i })).toBeInTheDocument();
+  });
+
+  it("shows uploading spinner when youtubeUploadStatus is pending", () => {
+    render(
+      <ClipCard
+        clip={{ ...baseClip, youtubeUploadStatus: "pending" }}
+        onClipUpdate={onClipUpdate}
+      />,
+    );
+    expect(screen.getByText("Uploading…")).toBeInTheDocument();
+  });
+
+  it("shows view on youtube link when upload succeeded", () => {
+    render(
+      <ClipCard
+        clip={{ ...baseClip, youtubeUploadStatus: "uploaded", youtubeVideoId: "abc123" }}
+        onClipUpdate={onClipUpdate}
+      />,
+    );
+    const link = screen.getByRole("link", { name: /view on youtube/i });
+    expect(link).toHaveAttribute("href", "https://youtube.com/shorts/abc123");
+  });
+
+  it("shows upload failed message and retry button when upload failed", () => {
+    render(
+      <ClipCard
+        clip={{ ...baseClip, s3Url: "https://s3.example.com/clip.mp4", youtubeUploadStatus: "failed" }}
+        onClipUpdate={onClipUpdate}
+      />,
+    );
+    expect(screen.getByText("Upload failed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+  });
 });

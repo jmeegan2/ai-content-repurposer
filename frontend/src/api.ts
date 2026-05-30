@@ -157,6 +157,16 @@ export async function getYoutubeAuthUrl(): Promise<string> {
   return data.url;
 }
 
+export async function getClipYoutubeStatus(
+  clipId: string,
+): Promise<{ youtubeUploadStatus: "pending" | "uploaded" | "failed" | null; youtubeVideoId: string | null }> {
+  const res = await fetch(`${BASE}/clips/${clipId}/youtube-status`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to get clip YouTube status");
+  return res.json() as Promise<{ youtubeUploadStatus: "pending" | "uploaded" | "failed" | null; youtubeVideoId: string | null }>;
+}
+
 export async function uploadClipToYoutube(
   clipId: string,
   title: string,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getJob, getJobs, cancelJob, getCredits } from "../api";
+import { getJob, getJobs, cancelJob, getCredits, getClipYoutubeStatus } from "../api";
 import type { Job } from "../types";
 import { UrlForm } from "../components/UrlForm";
 import { JobSection } from "../components/JobSection";
@@ -10,11 +10,13 @@ import { useUpload } from "../hooks/useUpload";
 
 const TERMINAL = new Set(["done", "failed", "cancelled"]);
 
-function isActive(job: Job) {
-  return (
-    !TERMINAL.has(job.status) ||
-    job.clips.some((c) => c.youtubeUploadStatus === "pending")
-  );
+function isProcessing(job: Job) {
+  return !TERMINAL.has(job.status);
+}
+
+function pendingYoutubeClipIds(job: Job): string[] {
+  if (!TERMINAL.has(job.status)) return [];
+  return job.clips.filter((c) => c.youtubeUploadStatus === "pending").map((c) => c.id);
 }
 
 function ClipCardSkeleton() {
@@ -56,13 +58,14 @@ export function DashboardPage() {
       .catch(() => {});
   }, [session?.user.id]);
 
-  const activeIds = jobs.filter(isActive).map((j) => j.id);
+  // Poll full job data only while the job is still processing
+  const processingIds = jobs.filter(isProcessing).map((j) => j.id);
   useEffect(() => {
-    if (activeIds.length === 0) return;
+    if (processingIds.length === 0) return;
     const interval = setInterval(async () => {
       let shouldRefreshCredits = false;
       await Promise.all(
-        activeIds.map(async (id) => {
+        processingIds.map(async (id) => {
           try {
             const updated = await getJob(id);
             setJobs((prev) => prev.map((j) => (j.id === id ? updated : j)));
@@ -82,7 +85,33 @@ export function DashboardPage() {
       }
     }, 2000);
     return () => clearInterval(interval);
-  }, [activeIds.join(",")]);
+  }, [processingIds.join(",")]);
+
+  // Poll only YouTube status for done jobs with pending uploads — never regenerates S3 URLs
+  const pendingYoutubeIds = jobs.flatMap(pendingYoutubeClipIds);
+  useEffect(() => {
+    if (pendingYoutubeIds.length === 0) return;
+    const interval = setInterval(async () => {
+      await Promise.all(
+        pendingYoutubeIds.map(async (clipId) => {
+          try {
+            const { youtubeUploadStatus, youtubeVideoId } = await getClipYoutubeStatus(clipId);
+            setJobs((prev) =>
+              prev.map((j) => ({
+                ...j,
+                clips: j.clips.map((c) =>
+                  c.id === clipId
+                    ? { ...c, youtubeUploadStatus: youtubeUploadStatus ?? undefined, youtubeVideoId: youtubeVideoId ?? undefined }
+                    : c
+                ),
+              }))
+            );
+          } catch {}
+        }),
+      );
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [pendingYoutubeIds.join(",")]);
 
   function updateJob(updated: Job) {
     setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
