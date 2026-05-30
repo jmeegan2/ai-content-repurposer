@@ -7,6 +7,7 @@ image = (
         "openai>=1.0.0",
         "boto3",
         "supabase",
+        "fastapi",
         "mediapipe==0.10.14",
         "opencv-python-headless==4.10.0.84",
         "numpy>=1.24,<2.0",
