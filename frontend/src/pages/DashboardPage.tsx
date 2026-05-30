@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { getJob, getJobs, cancelJob, getCredits, getClipYoutubeStatus } from "../api";
 import type { Job } from "../types";
@@ -39,16 +40,33 @@ export function DashboardPage() {
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | undefined>(undefined);
   const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
+  const connectionToastId = useRef<string | number | null>(null);
   const { submit, submitting, uploadProgress, abortUpload, error } = useUpload((job) =>
     setJobs((prev) => [job, ...prev])
   );
+
+  function showConnectionError() {
+    if (connectionToastId.current) return;
+    connectionToastId.current = toast.error("Unable to reach server", {
+      description: "Check your connection and refresh the page.",
+      duration: Infinity,
+      onDismiss: () => { connectionToastId.current = null; },
+    });
+  }
+
+  function clearConnectionError() {
+    if (connectionToastId.current) {
+      toast.dismiss(connectionToastId.current);
+      connectionToastId.current = null;
+    }
+  }
 
   useEffect(() => {
     if (!session) return;
     setLoadingJobs(true);
     getJobs()
-      .then(setJobs)
-      .catch(() => {})
+      .then((data) => { setJobs(data); clearConnectionError(); })
+      .catch(showConnectionError)
       .finally(() => setLoadingJobs(false));
     getCredits()
       .then((data) => {
@@ -64,6 +82,7 @@ export function DashboardPage() {
     if (processingIds.length === 0) return;
     const interval = setInterval(async () => {
       let shouldRefreshCredits = false;
+      let anySuccess = false;
       await Promise.all(
         processingIds.map(async (id) => {
           try {
@@ -72,9 +91,13 @@ export function DashboardPage() {
             if (updated.status === "done" || updated.status === "failed") {
               shouldRefreshCredits = true;
             }
-          } catch {}
+            anySuccess = true;
+          } catch {
+            showConnectionError();
+          }
         }),
       );
+      if (anySuccess) clearConnectionError();
       if (shouldRefreshCredits) {
         getCredits()
           .then((data) => {
@@ -134,7 +157,10 @@ export function DashboardPage() {
       {/* Nav */}
       <nav className="sticky top-0 z-50 border-b border-zinc-800 bg-surface/90 backdrop-blur-md">
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center justify-between">
-          <span className="font-bold text-base tracking-tight">ClipCraft</span>
+          <div className="flex items-center gap-2">
+            <img src="/favicon.svg" className="h-6 w-6" alt="" />
+            <span className="font-bold text-base tracking-tight">HorizonClips</span>
+          </div>
           <div className="flex items-center gap-3">
             {creditsRemaining !== null && (
               <span className="flex items-center gap-1.5 text-sm font-semibold text-white tabular-nums">

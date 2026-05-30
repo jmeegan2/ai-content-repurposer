@@ -77,7 +77,10 @@ export function PricingPage() {
       {/* Nav */}
       <nav className="sticky top-0 z-50 border-b border-zinc-800 bg-surface/90 backdrop-blur-md">
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center justify-between">
-          <span className="font-bold text-base tracking-tight">ClipCraft</span>
+          <div className="flex items-center gap-2">
+            <img src="/favicon.svg" className="h-6 w-6" alt="" />
+            <span className="font-bold text-base tracking-tight">HorizonClips</span>
+          </div>
           <button
             onClick={() => navigate(-1)}
             className="text-zinc-500 hover:text-zinc-300 text-sm transition-colors"

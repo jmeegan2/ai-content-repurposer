@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, act } from "@testing-library/react";
 import * as api from "../api";
+import { toast } from "sonner";
 import type { Job } from "../types";
+
+vi.mock("sonner", () => ({
+  toast: { error: vi.fn().mockReturnValue("toast-id-1"), dismiss: vi.fn() },
+  Toaster: () => null,
+}));
 
 vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
 vi.mock("../lib/auth", () => ({ useSession: () => ({ user: { id: "user-1" } }) }));
@@ -95,6 +101,7 @@ describe("DashboardPage YouTube status polling", () => {
   });
 
   it("stops polling youtube status once upload resolves", async () => {
+
     vi.mocked(api.getClipYoutubeStatus).mockResolvedValue({
       youtubeUploadStatus: "uploaded",
       youtubeVideoId: "yt-abc123",
@@ -114,5 +121,72 @@ describe("DashboardPage YouTube status polling", () => {
     await act(async () => { await Promise.resolve(); });
 
     expect(vi.mocked(api.getClipYoutubeStatus).mock.calls.length).toBe(callsAfterFirstTick);
+  });
+});
+
+const processingJob: Job = {
+  id: "job-2",
+  youtubeUrl: "upload:video.mp4",
+  status: "transcribing" as const,
+  error: undefined,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+  clips: [],
+};
+
+describe("DashboardPage connection error handling", () => {
+  it("shows error toast when getJobs fails", async () => {
+    vi.mocked(api.getJobs).mockRejectedValue(new TypeError("Failed to fetch"));
+
+    render(<DashboardPage />);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(vi.mocked(toast.error)).toHaveBeenCalledWith(
+      "Unable to reach server",
+      expect.objectContaining({ duration: Infinity }),
+    );
+  });
+
+  it("does not show error toast when getJobs succeeds", async () => {
+    render(<DashboardPage />);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(vi.mocked(toast.error)).not.toHaveBeenCalled();
+  });
+
+  it("shows error toast when job polling fails", async () => {
+    vi.mocked(api.getJobs).mockResolvedValue([processingJob]);
+    vi.mocked(api.getJob).mockRejectedValue(new TypeError("Failed to fetch"));
+
+    render(<DashboardPage />);
+    await act(async () => { await Promise.resolve(); }); // flush getJobs
+
+    await act(async () => { vi.advanceTimersByTime(2000); });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(vi.mocked(toast.error)).toHaveBeenCalledWith(
+      "Unable to reach server",
+      expect.objectContaining({ duration: Infinity }),
+    );
+  });
+
+  it("dismisses error toast when polling recovers", async () => {
+    vi.mocked(api.getJobs).mockResolvedValue([processingJob]);
+    vi.mocked(api.getJob)
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValue({ ...processingJob });
+
+    render(<DashboardPage />);
+    await act(async () => { await Promise.resolve(); }); // flush getJobs
+
+    // First poll — fails, toast shown
+    await act(async () => { vi.advanceTimersByTime(2000); });
+    await act(async () => { await Promise.resolve(); });
+    expect(vi.mocked(toast.error)).toHaveBeenCalled();
+
+    // Second poll — succeeds, toast dismissed
+    await act(async () => { vi.advanceTimersByTime(2000); });
+    await act(async () => { await Promise.resolve(); });
+    expect(vi.mocked(toast.dismiss)).toHaveBeenCalledWith("toast-id-1");
   });
 });

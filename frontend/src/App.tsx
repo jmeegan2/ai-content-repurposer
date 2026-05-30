@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { Toaster } from "sonner";
 import { useSession, useAuthEvent } from "./lib/auth";
 import { LandingPage } from "./pages/LandingPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -32,6 +33,7 @@ function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <>
+      <Toaster position="bottom-right" theme="dark" richColors />
       <PasswordRecoveryRedirect />
       <Routes>
         <Route
