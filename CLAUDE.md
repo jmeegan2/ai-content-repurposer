@@ -40,6 +40,8 @@ cd backend-python
 modal deploy services/modal_runner.py
 ```
 
+> **Important:** Modal does NOT auto-deploy when Railway deploys. Any changes to pipeline code (`services/pipeline.py`, `services/autoframe.py`, `services/clipper.py`, etc.) require a manual `modal deploy` until #61 (GitHub Action auto-deploy) is implemented.
+
 **Frontend:**
 ```bash
 cd frontend
