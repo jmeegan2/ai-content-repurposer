@@ -25,6 +25,40 @@ def _do_upload(user_id: str, clip_id: str, s3_key: str, title: str, description:
         ).eq("id", clip_id).execute()
 
 
+@router.get("/{clip_id}/youtube-status")
+async def get_clip_youtube_status(
+    clip_id: str,
+    user_id: str = Depends(require_auth),
+):
+    clip_result = (
+        supabase.table("clips")
+        .select("job_id, youtube_upload_status, youtube_video_id")
+        .eq("id", clip_id)
+        .maybe_single()
+        .execute()
+    )
+    if not clip_result.data:
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    clip = clip_result.data
+
+    job_result = (
+        supabase.table("jobs")
+        .select("id")
+        .eq("id", clip["job_id"])
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    if not job_result.data:
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    return {
+        "youtubeUploadStatus": clip.get("youtube_upload_status"),
+        "youtubeVideoId": clip.get("youtube_video_id"),
+    }
+
+
 @router.post("/{clip_id}/upload-youtube", status_code=202)
 async def upload_clip_to_youtube(
     clip_id: str,
