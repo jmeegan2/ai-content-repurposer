@@ -106,8 +106,10 @@ def run_pipeline_from_file(job_id: str, file_path: str, temp_dir: str, update_jo
         ]
 
         if not clips:
-            update_job(job_id, {"clips": [], "status": "done"})
-            logger.info(f"[{job_id}] no clips detected — pipeline done — total {elapsed()}")
+            if refund_credits_fn:
+                refund_credits_fn()
+            update_job(job_id, {"status": "done", "error": "No viral clips were found in this video. Try a video with more speech or clear standout moments."})
+            logger.info(f"[{job_id}] no clips detected — credits refunded — total {elapsed()}")
             return
 
         update_job(job_id, {"status": "processing"})

@@ -51,8 +51,8 @@ npm run test:run   # vitest single run
 **Python tests:**
 ```bash
 cd backend-python
-python3 -m pytest tests/
-python3 -m pytest tests/test_autoframe.py  # single file
+pytest tests/
+pytest tests/test_autoframe.py  # single file
 ```
 
 ## Architecture
@@ -83,6 +83,26 @@ The pipeline runs entirely on Modal, not on the local FastAPI server:
 - All frames in a segment get the same static crop x — no panning, hard jump at cuts
 - Falls back to center when no face detected
 
+### Clip processing (clipper.py)
+
+Two-pass ffmpeg pipeline per clip:
+1. **Pass 1** — `autoframe.process_clip` → face-tracked 9:16 crop, outputs `<id>-tracked.mp4`
+2. **Pass 2** — `ffmpeg subtitles` filter burns the generated SRT onto the tracked video, outputs `<id>.mp4`
+
+Intermediate tracked file is deleted after pass 2. Thumbnail is grabbed from the clip midpoint.
+
+### Clip detection (clip_detector.py)
+
+GPT tool-calling with forced `report_clips` function. Returns clips with virality scores 1–10. The `viralityScore >= 6` filter is currently **commented out** — all returned clips are passed to processing regardless of score.
+
+### YouTube OAuth
+
+`services/youtube.py` handles Google OAuth with PKCE:
+- `GET /youtube-auth/url` — returns OAuth URL; `user_id` + PKCE verifier are base64-packed into `state`
+- `GET /youtube-auth/callback` — public route (no auth); decodes state, exchanges code for tokens, upserts into `youtube_tokens`
+- On each upload, `_get_refreshed_credentials` auto-refreshes expired tokens. On `RefreshError`, the token row is **deleted** — `GET /youtube-auth/status` returns `connected: false` and the frontend prompts re-auth
+- YouTube uploads run as FastAPI `BackgroundTasks` (not Modal) — `POST /clips/:id/upload-youtube` returns 202 immediately
+
 ### Auth
 
 All API routes use `middleware/auth.py:require_auth` as a FastAPI dependency. It validates the Supabase Bearer JWT and returns `user_id`. The frontend stores the session via `@supabase/supabase-js` and passes the access token in `Authorization: Bearer <token>`.
@@ -95,8 +115,7 @@ All API routes use `middleware/auth.py:require_auth` as a FastAPI dependency. It
 - `reset_monthly_credits` — resets to 150 on subscription renewal
 
 **Known bugs (not yet fixed):**
-- Credits are not refunded when a job is cancelled or the pipeline fails
-- Stripe webhook has no idempotency check — duplicate events can add credits twice
+- `deduct_credits` has a race condition — two concurrent jobs could both pass the credit check
 - `charge.refunded` webhook event is unhandled
 
 ### Stripe
@@ -105,7 +124,7 @@ Two routers in `routes/stripe.py`:
 - `webhook_router` — registered first in `main.py` because it needs the raw request body before FastAPI parses JSON
 - `router` — checkout/portal/credits endpoints
 
-Webhook handles: `checkout.session.completed` (new sub or topup), `invoice.payment_succeeded` (renewal), `customer.subscription.updated`, `customer.subscription.deleted`.
+Webhook handles: `checkout.session.completed` (new sub or topup), `invoice.payment_succeeded` (renewal), `customer.subscription.updated`, `customer.subscription.deleted`. Idempotency is enforced via the `stripe_webhook_events` table (insert-only, keyed on `event_id`).
 
 ### Models
 
@@ -142,6 +161,9 @@ SUPABASE_SERVICE_ROLE_KEY=
 FRONTEND_URL=http://localhost:5173
 FFMPEG_PATH=/opt/homebrew/bin/ffmpeg
 YTDLP_PATH=/opt/homebrew/bin/yt-dlp
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=
 ```
 
 Modal secrets are stored in Modal's secret manager under `ai-repurposer-secrets`.
@@ -163,6 +185,7 @@ CREATE TABLE public.jobs (
   youtube_url text NOT NULL,  -- "upload:<filename>" for direct uploads
   status text NOT NULL DEFAULT 'queued',  -- queued|downloading|transcribing|detecting|processing|done|failed|cancelled
   modal_call_id text,
+  credits_deducted integer,
   transcript jsonb,
   error text,
   created_at timestamptz NOT NULL DEFAULT now(),

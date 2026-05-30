@@ -26,7 +26,7 @@ def test_pipeline_failure_calls_refund_fn():
     update_job.assert_any_call("job-1", {"status": "failed", "error": "whisper failed"})
 
 
-def test_pipeline_success_does_not_call_refund_fn():
+def test_pipeline_no_clips_calls_refund_fn():
     update_job = MagicMock()
     refund_credits_fn = MagicMock()
 
@@ -46,5 +46,8 @@ def test_pipeline_success_does_not_call_refund_fn():
                 refund_credits_fn=refund_credits_fn,
             )
 
-    refund_credits_fn.assert_not_called()
-    update_job.assert_any_call("job-1", {"clips": [], "status": "done"})
+    refund_credits_fn.assert_called_once()
+    update_job.assert_any_call("job-1", {
+        "status": "done",
+        "error": "No viral clips were found in this video. Try a video with more speech or clear standout moments.",
+    })

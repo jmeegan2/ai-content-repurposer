@@ -80,6 +80,10 @@ export function JobSection({ job, onJobUpdate, onCancel }: Props) {
         <p className="text-red-400 text-sm">{job.error}</p>
       )}
 
+      {job.status === "done" && job.clips.length === 0 && (
+        <p className="text-amber-400 text-sm">{job.error ?? "No viral clips were found in this video."}</p>
+      )}
+
       {job.clips.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {job.clips.map((clip) => (
