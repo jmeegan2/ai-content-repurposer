@@ -78,8 +78,9 @@ export function LandingPage() {
           }`}
         >
           <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-            <Link to="/" className="text-lg font-bold tracking-tight select-none">
-              ClipCraft
+            <Link to="/" className="flex items-center gap-2 text-lg font-bold tracking-tight select-none">
+              <img src="/favicon.svg" className="h-7 w-7" alt="" />
+              HorizonClips
             </Link>
             <div className="flex items-center gap-2">
               <Link
@@ -384,8 +385,8 @@ export function LandingPage() {
         {/* ── Footer ── */}
         <footer className="border-t border-zinc-900 py-8 px-6">
           <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <span className="font-bold text-sm">ClipCraft</span>
-            <p className="text-zinc-700 text-xs">© 2026 ClipCraft. All rights reserved.</p>
+            <span className="font-bold text-sm">HorizonClips</span>
+            <p className="text-zinc-700 text-xs">© 2026 HorizonClips. All rights reserved.</p>
             <div className="flex items-center gap-6">
               <Link to="/login" className="text-zinc-600 hover:text-zinc-300 text-sm transition-colors">
                 Sign in

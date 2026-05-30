@@ -136,7 +136,8 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-surface text-white flex items-center justify-center px-4">
       <div className="w-full max-w-sm flex flex-col gap-6">
         <Link to="/" className="flex items-center gap-2 mb-2">
-          <span className="text-xl font-bold tracking-tight">ClipCraft</span>
+          <img src="/favicon.svg" className="h-6 w-6" alt="" />
+          <span className="text-xl font-bold tracking-tight">HorizonClips</span>
         </Link>
         <div className="bg-panel border border-zinc-800 rounded-2xl p-8 flex flex-col gap-6">
           {children}
