@@ -166,8 +166,6 @@ def cancel_job(job_id: str, user_id: str = Depends(require_auth)):
     )
     if not job_resp.data:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job_resp.data["status"] in ("done", "failed", "cancelled"):
-        raise HTTPException(status_code=409, detail="Job is already in a terminal state")
 
     call_id = job_resp.data.get("modal_call_id")
     if call_id:
@@ -177,8 +175,20 @@ def cancel_job(job_id: str, user_id: str = Depends(require_auth)):
         except Exception as e:
             logger.warning(f"[{job_id}] Modal cancel failed — {e}")
 
+    # Atomically claim the cancellation — only succeeds if job is not already terminal.
+    # This prevents concurrent cancel requests from each refunding credits.
+    update_resp = (
+        supabase.table("jobs")
+        .update({"status": "cancelled"})
+        .eq("id", job_id)
+        .eq("user_id", user_id)
+        .not_.in_("status", ["done", "failed", "cancelled"])
+        .execute()
+    )
+    if not update_resp.data:
+        raise HTTPException(status_code=409, detail="Job is already in a terminal state")
+
     refund_job_credits(supabase, job_id, user_id)
-    supabase.table("jobs").update({"status": "cancelled"}).eq("id", job_id).execute()
     logger.info(f"[{job_id}] cancelled by user={user_id}")
 
 

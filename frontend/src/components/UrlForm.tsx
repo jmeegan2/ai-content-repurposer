@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Props {
   onFileSelect: (file: File) => void;
@@ -24,9 +24,17 @@ export function UrlForm({
   disabled,
 }: Props) {
   const [dragging, setDragging] = useState(false);
+  const [cancellingUpload, setCancellingUpload] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isUploading = uploadProgress !== null && uploadProgress !== undefined;
+
+  useEffect(() => {
+    if (!isUploading) {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setCancellingUpload(false);
+    }
+  }, [isUploading]);
 
   function handleFile(file: File) {
     if (!file.name.toLowerCase().endsWith(".mp4")) return;
@@ -71,9 +79,8 @@ export function UrlForm({
             className="mt-3 w-full bg-white hover:bg-zinc-100 disabled:opacity-60 disabled:cursor-not-allowed text-black py-3 rounded-xl font-semibold text-sm transition-colors select-none flex items-center justify-center gap-2"
           >
             {processing && (
-              <svg className="animate-spin h-4 w-4 text-black" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden className="animate-spin">
+                <path d="M12 2a10 10 0 0 1 10 10" />
               </svg>
             )}
             {processing ? "Starting…" : "Generate Clips"}
@@ -146,10 +153,16 @@ export function UrlForm({
             {onCancelUpload && (
               <button
                 type="button"
-                onClick={onCancelUpload}
-                className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors"
+                disabled={cancellingUpload}
+                onClick={() => { setCancellingUpload(true); onCancelUpload(); }}
+                className="flex items-center gap-1.5 w-fit text-zinc-600 hover:text-zinc-400 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-zinc-600"
               >
-                Cancel
+                {cancellingUpload && (
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden className="animate-spin">
+                    <path d="M12 2a10 10 0 0 1 10 10" />
+                  </svg>
+                )}
+                {cancellingUpload ? "Cancelling…" : "Cancel"}
               </button>
             )}
           </div>

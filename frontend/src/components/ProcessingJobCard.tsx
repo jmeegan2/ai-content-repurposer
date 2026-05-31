@@ -6,7 +6,7 @@ const TERMINAL = new Set(["done", "failed", "cancelled"]);
 
 interface Props {
   job: Job;
-  onCancel: (id: string) => void;
+  onCancel: (id: string) => Promise<void>;
   localThumbnailUrl?: string;
 }
 
@@ -28,11 +28,20 @@ function XIcon() {
   );
 }
 
+function SpinnerIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden className="animate-spin">
+      <path d="M12 2a10 10 0 0 1 10 10" />
+    </svg>
+  );
+}
+
 export function ProcessingJobCard({ job, onCancel, localThumbnailUrl }: Props) {
   const percent = statusToPercent(job.status);
   const isFailed = job.status === "failed" || job.status === "cancelled";
   const filename = job.youtubeUrl.replace(/^upload:/, "");
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   return (
     <div className="flex flex-col gap-2">
       <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-900">
@@ -72,10 +81,16 @@ export function ProcessingJobCard({ job, onCancel, localThumbnailUrl }: Props) {
 
       {!TERMINAL.has(job.status) && (
         <button
-          onClick={() => onCancel(job.id)}
-          className="text-xs text-zinc-500 hover:text-red-400 transition-colors self-start"
+          disabled={cancelling}
+          onClick={async () => {
+            setCancelling(true);
+            await onCancel(job.id);
+            setCancelling(false);
+          }}
+          className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-red-400 transition-colors self-start disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-zinc-500"
         >
-          Cancel
+          {cancelling && <SpinnerIcon />}
+          {cancelling ? "Cancelling…" : "Cancel"}
         </button>
       )}
     </div>
