@@ -50,6 +50,8 @@ class Job(AppModel):
     transcript: Optional[Transcript] = None
     error: Optional[str] = None
     clips: list[Clip] = []
+    source_thumbnail_key: Optional[str] = None
+    source_thumbnail_url: Optional[str] = None
 
 
 class DetectedClip(AppModel):

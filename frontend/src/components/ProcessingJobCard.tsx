@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Job } from "../types";
 import { statusToPercent, calcEta } from "../utils/progress";
 
@@ -6,6 +7,7 @@ const TERMINAL = new Set(["done", "failed", "cancelled"]);
 interface Props {
   job: Job;
   onCancel: (id: string) => void;
+  localThumbnailUrl?: string;
 }
 
 function ClockIcon() {
@@ -26,14 +28,24 @@ function XIcon() {
   );
 }
 
-export function ProcessingJobCard({ job, onCancel }: Props) {
+export function ProcessingJobCard({ job, onCancel, localThumbnailUrl }: Props) {
   const percent = statusToPercent(job.status);
   const isFailed = job.status === "failed" || job.status === "cancelled";
   const filename = job.youtubeUrl.replace(/^upload:/, "");
+  const [imgLoaded, setImgLoaded] = useState(false);
   return (
     <div className="flex flex-col gap-2">
       <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-900">
-        <div className="absolute inset-0 bg-zinc-800" />
+        <div className={`absolute inset-0 bg-zinc-800 transition-opacity duration-300 ${imgLoaded ? "opacity-0" : "opacity-100"}`} />
+        {(localThumbnailUrl ?? job.sourceThumbnailUrl) && (
+          <img
+            src={localThumbnailUrl ?? job.sourceThumbnailUrl}
+            alt=""
+            onLoad={() => setImgLoaded(true)}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
+          />
+        )}
+        <div className="absolute inset-0 bg-black/50" />
         <div className="absolute inset-0 flex items-center justify-center">
           {isFailed ? (
             <div className="flex items-center gap-2 bg-red-950/90 border border-red-800 rounded-full px-4 py-2 text-red-300">

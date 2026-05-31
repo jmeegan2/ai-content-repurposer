@@ -29,4 +29,5 @@ export interface Job {
   createdAt: string;
   updatedAt: string;
   creditsDeducted?: number;
+  sourceThumbnailUrl?: string;
 }

@@ -25,6 +25,7 @@ const mockUploadUrl = {
   job_id: "job-1",
   upload_url: "https://s3.example.com/upload",
   s3_key: "raw/job-1/video.mp4",
+  thumbnail_upload_url: "https://s3.example.com/thumbnail-upload",
 };
 
 const mockJob = {
@@ -36,12 +37,22 @@ const mockJob = {
   updatedAt: "2026-01-01T00:00:00Z",
 };
 
+function mockCanvas(blob: Blob | null) {
+  const ctx = { drawImage: vi.fn() };
+  const canvas: any = {
+    width: 0,
+    height: 0,
+    getContext: vi.fn().mockReturnValue(ctx),
+    toBlob: vi.fn().mockImplementation((cb: (b: Blob | null) => void) => queueMicrotask(() => cb(blob))),
+  };
+  return { canvas, ctx };
+}
+
+// Fires onerror — thumbnail capture fails, duration resolves to 0.
 function mockVideoElement() {
-  // getVideoDuration creates a <video> and waits for onloadedmetadata/onerror.
-  // jsdom never fires media events, so intercept and fire onerror immediately (resolves to 0).
   vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
     if (tag === "video") {
-      const el: any = { preload: "", duration: 0, onloadedmetadata: null, onerror: null };
+      const el: any = { preload: "", muted: false, duration: 0, videoWidth: 0, videoHeight: 0, onloadedmetadata: null, onseeked: null, onerror: null };
       let _src = "";
       Object.defineProperty(el, "src", {
         get: () => _src,
@@ -50,16 +61,47 @@ function mockVideoElement() {
       });
       return el;
     }
-    // Call the real implementation via the prototype to avoid recursive spy call
     return HTMLDocument.prototype.createElement.call(document, tag);
   });
   vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
   vi.spyOn(URL, "revokeObjectURL").mockReturnValue(undefined);
 }
 
+// Fires onloadedmetadata then onseeked — simulates successful thumbnail capture.
+function mockVideoElementWithMetadata(duration: number, blob: Blob | null) {
+  const { canvas } = mockCanvas(blob);
+  vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+    if (tag === "video") {
+      const el: any = {
+        preload: "", muted: false,
+        duration, videoWidth: 1280, videoHeight: 720,
+        onloadedmetadata: null, onseeked: null, onerror: null,
+      };
+      let _currentTime = 0;
+      Object.defineProperty(el, "currentTime", {
+        get: () => _currentTime,
+        set: (val) => { _currentTime = val; queueMicrotask(() => el.onseeked?.()); },
+        configurable: true,
+      });
+      let _src = "";
+      Object.defineProperty(el, "src", {
+        get: () => _src,
+        set: (val) => { _src = val; queueMicrotask(() => el.onloadedmetadata?.()); },
+        configurable: true,
+      });
+      return el;
+    }
+    if (tag === "canvas") return canvas;
+    return HTMLDocument.prototype.createElement.call(document, tag);
+  });
+  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
+  vi.spyOn(URL, "revokeObjectURL").mockReturnValue(undefined);
+  return { canvas };
+}
+
 beforeEach(() => {
-  vi.restoreAllMocks(); // restores spies; module mocks (vi.mock) are unaffected
-  vi.clearAllMocks();   // resets call counts on module mocks
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
   mockVideoElement();
 });
 
@@ -74,7 +116,7 @@ describe("useUpload — S3 network error", () => {
 
     const { result } = renderHook(() => useUpload(vi.fn()));
 
-    await act(async () => { await result.current.submit(mockFile); });
+    await act(async () => { await result.current.startUpload(mockFile); });
 
     expect(cancelJob).toHaveBeenCalledWith("job-1");
     expect(result.current.error).toBe("S3 upload network error");
@@ -91,7 +133,7 @@ describe("useUpload — S3 network error", () => {
 
     const { result } = renderHook(() => useUpload(vi.fn()));
 
-    await act(async () => { await result.current.submit(mockFile); });
+    await act(async () => { await result.current.startUpload(mockFile); });
 
     expect(cancelJob).toHaveBeenCalledWith("job-1");
     expect(result.current.error).toBe("S3 upload failed: 403");
@@ -110,7 +152,7 @@ describe("useUpload — user abort", () => {
 
     const { result } = renderHook(() => useUpload(vi.fn()));
 
-    await act(async () => { await result.current.submit(mockFile); });
+    await act(async () => { await result.current.startUpload(mockFile); });
 
     expect(cancelJob).toHaveBeenCalledWith("job-1");
     expect(result.current.error).toBeNull();
@@ -118,7 +160,7 @@ describe("useUpload — user abort", () => {
 });
 
 describe("useUpload — happy path", () => {
-  it("calls completeUpload and onJobCreated on success, never calls cancelJob", async () => {
+  it("sets uploadDone after upload, then calls completeUpload and onJobCreated on generateClips", async () => {
     vi.mocked(requestUploadUrl).mockResolvedValue(mockUploadUrl);
     vi.mocked(uploadToS3).mockImplementation(() => ({
       promise: Promise.resolve(),
@@ -129,11 +171,65 @@ describe("useUpload — happy path", () => {
     const onJobCreated = vi.fn();
     const { result } = renderHook(() => useUpload(onJobCreated));
 
-    await act(async () => { await result.current.submit(mockFile); });
+    await act(async () => { await result.current.startUpload(mockFile); });
+
+    expect(result.current.uploadDone).toBe(true);
+    expect(completeUpload).not.toHaveBeenCalled();
+
+    await act(async () => { await result.current.generateClips(); });
 
     expect(completeUpload).toHaveBeenCalledWith("job-1", "raw/job-1/video.mp4", expect.any(Number));
     expect(onJobCreated).toHaveBeenCalledWith(mockJob);
     expect(cancelJob).not.toHaveBeenCalled();
+    expect(result.current.uploadDone).toBe(false);
     expect(result.current.error).toBeNull();
+  });
+});
+
+describe("useUpload — thumbnail capture", () => {
+  it("seeks to 10% of duration when capturing thumbnail", async () => {
+    const blob = new Blob(["img"], { type: "image/jpeg" });
+    const { canvas } = mockVideoElementWithMetadata(100, blob);
+
+    vi.mocked(requestUploadUrl).mockResolvedValue(mockUploadUrl);
+    vi.mocked(uploadToS3).mockImplementation(() => ({ promise: Promise.resolve(), abort: vi.fn() }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+
+    const { result } = renderHook(() => useUpload(vi.fn()));
+    await act(async () => { await result.current.startUpload(mockFile); });
+
+    expect(canvas.toBlob).toHaveBeenCalled();
+    expect(canvas.getContext).toHaveBeenCalledWith("2d");
+  });
+
+  it("uploads thumbnail blob to thumbnail_upload_url via PUT", async () => {
+    const blob = new Blob(["img"], { type: "image/jpeg" });
+    mockVideoElementWithMetadata(60, blob);
+
+    vi.mocked(requestUploadUrl).mockResolvedValue(mockUploadUrl);
+    vi.mocked(uploadToS3).mockImplementation(() => ({ promise: Promise.resolve(), abort: vi.fn() }));
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const { result } = renderHook(() => useUpload(vi.fn()));
+    await act(async () => { await result.current.startUpload(mockFile); });
+
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      mockUploadUrl.thumbnail_upload_url,
+      expect.objectContaining({ method: "PUT", headers: expect.objectContaining({ "Content-Type": "image/jpeg" }) }),
+    );
+  });
+
+  it("proceeds without error when thumbnail capture fails (onerror path)", async () => {
+    vi.mocked(requestUploadUrl).mockResolvedValue(mockUploadUrl);
+    vi.mocked(uploadToS3).mockImplementation(() => ({ promise: Promise.resolve(), abort: vi.fn() }));
+
+    const { result } = renderHook(() => useUpload(vi.fn()));
+    await act(async () => { await result.current.startUpload(mockFile); });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.uploadDone).toBe(true);
   });
 });

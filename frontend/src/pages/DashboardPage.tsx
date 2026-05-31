@@ -42,9 +42,12 @@ export function DashboardPage() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | undefined>(undefined);
   const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
   const connectionToastId = useRef<string | number | null>(null);
-  const { submit, submitting, uploadProgress, abortUpload, error } = useUpload((job) =>
-    setJobs((prev) => [job, ...prev])
-  );
+  const {
+    startUpload, generateClips, cancelPendingUpload,
+    uploading, processing, uploadProgress, abortUpload,
+    uploadDone, pendingThumbnailUrl,
+    error, localThumbnails,
+  } = useUpload((job) => setJobs((prev) => [job, ...prev]));
 
   function showConnectionError() {
     if (connectionToastId.current) return;
@@ -153,7 +156,7 @@ export function DashboardPage() {
 
   const processingJobs = jobs.filter((j) => !TERMINAL.has(j.status));
   const doneJobs = jobs.filter((j) => TERMINAL.has(j.status));
-  const isRunning = submitting || jobs.some((j) => !TERMINAL.has(j.status));
+  const isRunning = uploading || processing || jobs.some((j) => !TERMINAL.has(j.status));
 
   return (
     <div className="min-h-screen bg-surface text-white antialiased">
@@ -222,10 +225,15 @@ export function DashboardPage() {
 
           <div className="w-full">
             <UrlForm
-              onFileSubmit={submit}
-              disabled={isRunning}
-              uploadProgress={uploadProgress}
+              onFileSelect={startUpload}
+              onGenerateClips={generateClips}
               onCancelUpload={abortUpload ?? undefined}
+              onCancelPending={cancelPendingUpload}
+              uploadProgress={uploadProgress}
+              uploadDone={uploadDone}
+              pendingThumbnailUrl={pendingThumbnailUrl ?? undefined}
+              processing={processing}
+              disabled={isRunning && !uploadDone}
             />
             {error && (
               <p className="text-red-400 text-xs mt-2 text-left">{error}</p>
@@ -250,7 +258,7 @@ export function DashboardPage() {
             <h2 className="text-sm font-semibold text-zinc-400">Processing</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {processingJobs.map((job) => (
-                <ProcessingJobCard key={job.id} job={job} onCancel={handleCancel} />
+                <ProcessingJobCard key={job.id} job={job} onCancel={handleCancel} localThumbnailUrl={localThumbnails.get(job.id)} />
               ))}
             </div>
           </section>
