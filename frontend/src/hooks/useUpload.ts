@@ -5,13 +5,11 @@ import type { Job } from "../types";
 function getVideoDuration(file: File): Promise<number> {
   return new Promise((resolve) => {
     const video = document.createElement("video");
+    const url = URL.createObjectURL(file);
     video.preload = "metadata";
-    video.onloadedmetadata = () => {
-      URL.revokeObjectURL(video.src);
-      resolve(Math.ceil(video.duration));
-    };
-    video.onerror = () => resolve(0);
-    video.src = URL.createObjectURL(file);
+    video.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(Math.ceil(video.duration)); };
+    video.onerror = () => { URL.revokeObjectURL(url); resolve(0); };
+    video.src = url;
   });
 }
 
@@ -47,7 +45,6 @@ export function useUpload(onJobCreated: (job: Job) => void) {
       setSubmitting(false);
     }
   }
-
 
   return { submit, submitting, uploadProgress, abortUpload, error, clearError: () => setError(null) };
 }

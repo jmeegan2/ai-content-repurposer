@@ -39,6 +39,7 @@ def _db_job_to_job(row: dict, clips: list[Clip] = []) -> Job:
         status=row["status"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        credits_deducted=row.get("credits_deducted"),
         transcript=row.get("transcript"),
         error=row.get("error"),
         clips=clips,

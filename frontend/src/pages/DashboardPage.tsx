@@ -5,6 +5,7 @@ import { getJob, getJobs, cancelJob, getCredits, getClipYoutubeStatus } from "..
 import type { Job } from "../types";
 import { UrlForm } from "../components/UrlForm";
 import { JobSection } from "../components/JobSection";
+import { ProcessingJobCard } from "../components/ProcessingJobCard";
 import { useSession } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 import { useUpload } from "../hooks/useUpload";
@@ -150,6 +151,8 @@ export function DashboardPage() {
     } catch {}
   }
 
+  const processingJobs = jobs.filter((j) => !TERMINAL.has(j.status));
+  const doneJobs = jobs.filter((j) => TERMINAL.has(j.status));
   const isRunning = submitting || jobs.some((j) => !TERMINAL.has(j.status));
 
   return (
@@ -242,9 +245,20 @@ export function DashboardPage() {
           </div>
         )}
 
-        {!loadingJobs && jobs.length > 0 && (
+        {!loadingJobs && processingJobs.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <h2 className="text-sm font-semibold text-zinc-400">Processing</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {processingJobs.map((job) => (
+                <ProcessingJobCard key={job.id} job={job} onCancel={handleCancel} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {!loadingJobs && doneJobs.length > 0 && (
           <div className="flex flex-col gap-12">
-            {jobs.map((job) => (
+            {doneJobs.map((job) => (
               <JobSection key={job.id} job={job} onJobUpdate={updateJob} onCancel={handleCancel} />
             ))}
           </div>

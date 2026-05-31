@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Props {
   onFileSubmit: (file: File) => void;
@@ -11,6 +11,15 @@ export function UrlForm({ onFileSubmit, disabled, uploadProgress, onCancelUpload
   const [dragging, setDragging] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const prevProgress = useRef(uploadProgress);
+  useEffect(() => {
+    if (prevProgress.current != null && uploadProgress == null) {
+      setPendingFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+    prevProgress.current = uploadProgress;
+  }, [uploadProgress]);
 
   const canSubmit = !disabled && pendingFile !== null;
   const isUploading = uploadProgress !== null && uploadProgress !== undefined;

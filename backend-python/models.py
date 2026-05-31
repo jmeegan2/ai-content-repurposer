@@ -46,6 +46,7 @@ class Job(AppModel):
     status: JobStatus
     created_at: str
     updated_at: str
+    credits_deducted: Optional[int] = None
     transcript: Optional[Transcript] = None
     error: Optional[str] = None
     clips: list[Clip] = []
