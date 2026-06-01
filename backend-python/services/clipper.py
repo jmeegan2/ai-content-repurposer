@@ -23,7 +23,7 @@ def _build_srt(words: list[WordTimestamp], clip_start: float) -> str:
         phrase = words[i : i + _WORDS_PER_CAPTION]
         start = max(0.0, phrase[0].start - clip_start)
         end = phrase[-1].end - clip_start
-        text = " ".join(w.word.strip() for w in phrase)
+        text = " ".join(w.word.strip() for w in phrase).upper()
         index = i // _WORDS_PER_CAPTION + 1
         entries.append(f"{index}\n{_to_srt_time(start)} --> {_to_srt_time(end)}\n{text}\n")
     return "\n".join(entries)
@@ -52,7 +52,7 @@ def process_clip(
 
     # Pass 2: burn subtitles onto tracked video
     # Commas inside force_style must be escaped with \, so ffmpeg doesn't treat them as filter separators
-    subtitle_style = r"FontName=Arial\,FontSize=22\,PrimaryColour=&H00FFFFFF\,OutlineColour=&H00000000\,Outline=2\,Alignment=2\,MarginV=80"
+    subtitle_style = r"FontName=Futura\,FontSize=14\,Bold=1\,PrimaryColour=&H00FFFFFF\,OutlineColour=&H00000000\,Outline=1\,Shadow=0\,BorderStyle=1\,Alignment=2\,MarginV=45"
     run_ffmpeg(
         [
             FFMPEG, "-y",
