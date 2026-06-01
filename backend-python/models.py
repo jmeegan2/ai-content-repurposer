@@ -46,9 +46,12 @@ class Job(AppModel):
     status: JobStatus
     created_at: str
     updated_at: str
+    credits_deducted: Optional[int] = None
     transcript: Optional[Transcript] = None
     error: Optional[str] = None
     clips: list[Clip] = []
+    source_thumbnail_key: Optional[str] = None
+    source_thumbnail_url: Optional[str] = None
 
 
 class DetectedClip(AppModel):

@@ -34,7 +34,7 @@ export async function getJobs(): Promise<Job[]> {
 export async function requestUploadUrl(
   filename: string,
   durationSeconds: number,
-): Promise<{ job_id: string; upload_url: string; s3_key: string }> {
+): Promise<{ job_id: string; upload_url: string; s3_key: string; thumbnail_upload_url: string }> {
   const res = await fetch(`${BASE}/jobs/upload-url`, {
     method: "POST",
     headers: await authHeaders(),

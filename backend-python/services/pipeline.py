@@ -105,6 +105,7 @@ def run_pipeline_from_file(job_id: str, file_path: str, temp_dir: str, update_jo
             for dc in detected
         ]
 
+        # could come back to bite us in the ass if someone just uploads a blank vid, but doubtful that would happen 
         if not clips:
             if refund_credits_fn:
                 refund_credits_fn()

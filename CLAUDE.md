@@ -112,12 +112,11 @@ All API routes use `middleware/auth.py:require_auth` as a FastAPI dependency. It
 ### Credit system
 
 `services/credits.py`:
-- `deduct_credits` — read-then-write (not atomic; known race condition, fix with Postgres RPC)
+- `deduct_credits` — atomic via Postgres RPC (`deduct_credits` SQL function); returns 402 if insufficient credits
 - `add_credits` — used for refunds and top-ups
 - `reset_monthly_credits` — resets to 150 on subscription renewal
 
-**Known bugs (not yet fixed):**
-- `deduct_credits` has a race condition — two concurrent jobs could both pass the credit check
+**Credit rate: 1 credit = 1 minute of video** (rounded up via `math.ceil`)
 
 ### Stripe
 
@@ -146,28 +145,17 @@ See schema at bottom of this file. Key: jobs have `one_active_job_per_user` cons
 
 ## Environment variables
 
-Copy `.env.sample` to `.env` in `backend-python/`:
+Copy `.env.sample` to `.env` in `backend-python/`. Modal secrets are stored in Modal's secret manager under `ai-repurposer-secrets`.
 
-```
-OPENAI_API_KEY=
-AWS_REGION=us-east-2
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_S3_BUCKET=ai-repurposer-clips
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-STRIPE_PRO_PRICE_ID=
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-FRONTEND_URL=http://localhost:5173
-FFMPEG_PATH=/opt/homebrew/bin/ffmpeg
-YTDLP_PATH=/opt/homebrew/bin/yt-dlp
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=
-```
+## Database functions
 
-Modal secrets are stored in Modal's secret manager under `ai-repurposer-secrets`.
+See `docs/database-functions.md` for full SQL. Summary:
+
+- `deduct_credits(p_user_id, p_amount)` — atomic credit deduction; returns false if insufficient
+- `refund_credits(p_user_id, p_amount)` — atomic refund; increments `credits_remaining`, decrements `credits_used`
+- `handle_new_user` (trigger) — creates profile row on new auth signup
+- `set_job_completed_at` (trigger) — sets `completed_at` on first terminal status transition
+- `cleanup_stuck_jobs` (pg_cron, hourly) — marks jobs stuck >60min as failed and refunds credits
 
 ## Database schema
 

@@ -20,18 +20,13 @@ def check_credits(supabase, user_id: str, amount: int) -> None:
 
 
 def deduct_credits(supabase, user_id: str, amount: int) -> None:
-    # Read-then-write is not atomic, but one_active_job_per_user constraint makes concurrent deductions unreachable.
-    profile = get_profile(supabase, user_id)
-    if profile["credits_remaining"] < amount:
+    resp = supabase.rpc("deduct_credits", {"p_user_id": user_id, "p_amount": amount}).execute()
+    if not resp.data:
+        profile = get_profile(supabase, user_id)
         raise HTTPException(
             status_code=402,
             detail=f"Not enough credits. You need {amount} but only have {profile['credits_remaining']} remaining.",
         )
-    supabase.table("profiles").update({
-        "credits_remaining": profile["credits_remaining"] - amount,
-        "credits_used": profile["credits_used"] + amount,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }).eq("id", user_id).execute()
 
 
 def add_credits(supabase, user_id: str, amount: int) -> None:
@@ -48,7 +43,8 @@ def refund_job_credits(supabase, job_id: str, user_id: str) -> int:
     amount = (job.data or {}).get("credits_deducted", 0)
     if amount <= 0:
         return 0
-    add_credits(supabase, user_id, amount)
+    # atomic: increments credits_remaining and decrements credits_used in one statement
+    supabase.rpc("refund_credits", {"p_user_id": user_id, "p_amount": amount}).execute()
     supabase.table("jobs").update({"credits_deducted": 0}).eq("id", job_id).execute()
     return amount
 

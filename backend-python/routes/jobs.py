@@ -39,10 +39,17 @@ def _db_job_to_job(row: dict, clips: list[Clip] = []) -> Job:
         status=row["status"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        credits_deducted=row.get("credits_deducted"),
         transcript=row.get("transcript"),
         error=row.get("error"),
         clips=clips,
+        source_thumbnail_key=row.get("source_thumbnail_key"),
     )
+
+
+def _attach_source_thumbnail_url(job: Job) -> None:
+    if job.source_thumbnail_key:
+        job.source_thumbnail_url = get_presigned_url(job.source_thumbnail_key, _PRESIGNED_URL_TTL)
 
 
 _PRESIGNED_URL_TTL = 3600
@@ -81,6 +88,7 @@ def request_upload_url(
     job_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     s3_key = f"raw/{job_id}/{body.filename}"
+    thumbnail_s3_key = f"thumbnails/{job_id}/source.jpg"
 
     try:
         response = (
@@ -92,6 +100,7 @@ def request_upload_url(
                 "status": "queued",
                 "created_at": now,
                 "updated_at": now,
+                "source_thumbnail_key": thumbnail_s3_key,
             })
             .execute()
         )
@@ -104,8 +113,9 @@ def request_upload_url(
         raise HTTPException(status_code=500, detail="Failed to create job")
 
     upload_url = generate_presigned_upload_url(s3_key)
+    thumbnail_upload_url = generate_presigned_upload_url(thumbnail_s3_key, content_type="image/jpeg")
     logger.info(f"[{job_id}] upload-url issued (user={user_id})")
-    return {"job_id": job_id, "upload_url": upload_url, "s3_key": s3_key}
+    return {"job_id": job_id, "upload_url": upload_url, "s3_key": s3_key, "thumbnail_upload_url": thumbnail_upload_url}
 
 
 @router.post("/upload-complete")
@@ -156,8 +166,6 @@ def cancel_job(job_id: str, user_id: str = Depends(require_auth)):
     )
     if not job_resp.data:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job_resp.data["status"] in ("done", "failed", "cancelled"):
-        raise HTTPException(status_code=409, detail="Job is already in a terminal state")
 
     call_id = job_resp.data.get("modal_call_id")
     if call_id:
@@ -167,8 +175,20 @@ def cancel_job(job_id: str, user_id: str = Depends(require_auth)):
         except Exception as e:
             logger.warning(f"[{job_id}] Modal cancel failed — {e}")
 
+    # Atomically claim the cancellation — only succeeds if job is not already terminal.
+    # This prevents concurrent cancel requests from each refunding credits.
+    update_resp = (
+        supabase.table("jobs")
+        .update({"status": "cancelled"})
+        .eq("id", job_id)
+        .eq("user_id", user_id)
+        .not_.in_("status", ["done", "failed", "cancelled"])
+        .execute()
+    )
+    if not update_resp.data:
+        raise HTTPException(status_code=409, detail="Job is already in a terminal state")
+
     refund_job_credits(supabase, job_id, user_id)
-    supabase.table("jobs").update({"status": "cancelled"}).eq("id", job_id).execute()
     logger.info(f"[{job_id}] cancelled by user={user_id}")
 
 
@@ -192,7 +212,9 @@ def get_job(job_id: str, user_id: str = Depends(require_auth)) -> Job:
         for clip in clips:
             _attach_clip_urls(clip)
 
-    return JSONResponse(content=jsonable_encoder(_db_job_to_job(job_resp.data, clips), by_alias=True))
+    job = _db_job_to_job(job_resp.data, clips)
+    _attach_source_thumbnail_url(job)
+    return JSONResponse(content=jsonable_encoder(job, by_alias=True))
 
 
 @router.get("/")
@@ -224,9 +246,7 @@ def list_jobs(user_id: str = Depends(require_auth)) -> list[Job]:
             _attach_clip_urls(clip)
             clips_by_job.setdefault(row["job_id"], []).append(clip)
 
-    return JSONResponse(
-        content=jsonable_encoder(
-            [_db_job_to_job(row, clips_by_job.get(row["id"], [])) for row in job_rows],
-            by_alias=True,
-        )
-    )
+    jobs = [_db_job_to_job(row, clips_by_job.get(row["id"], [])) for row in job_rows]
+    for job in jobs:
+        _attach_source_thumbnail_url(job)
+    return JSONResponse(content=jsonable_encoder(jobs, by_alias=True))

@@ -13,7 +13,7 @@ vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
 vi.mock("../lib/auth", () => ({ useSession: () => ({ user: { id: "user-1" } }) }));
 vi.mock("../lib/supabase", () => ({ supabase: { auth: { signOut: vi.fn() } } }));
 vi.mock("../hooks/useUpload", () => ({
-  useUpload: () => ({ submit: vi.fn(), submitting: false, uploadProgress: null, abortUpload: null, error: null }),
+  useUpload: () => ({ submit: vi.fn(), submitting: false, uploadProgress: null, abortUpload: null, error: null, localThumbnails: new Map() }),
 }));
 vi.mock("../api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api")>();

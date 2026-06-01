@@ -5,6 +5,7 @@ import { getJob, getJobs, cancelJob, getCredits, getClipYoutubeStatus } from "..
 import type { Job } from "../types";
 import { UrlForm } from "../components/UrlForm";
 import { JobSection } from "../components/JobSection";
+import { ProcessingJobCard } from "../components/ProcessingJobCard";
 import { useSession } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 import { useUpload } from "../hooks/useUpload";
@@ -41,9 +42,12 @@ export function DashboardPage() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | undefined>(undefined);
   const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
   const connectionToastId = useRef<string | number | null>(null);
-  const { submit, submitting, uploadProgress, abortUpload, error } = useUpload((job) =>
-    setJobs((prev) => [job, ...prev])
-  );
+  const {
+    startUpload, generateClips, cancelPendingUpload,
+    uploading, processing, uploadProgress, abortUpload,
+    uploadDone, pendingThumbnailUrl, creditsNeeded,
+    error, localThumbnails,
+  } = useUpload((job) => setJobs((prev) => [job, ...prev]));
 
   function showConnectionError() {
     if (connectionToastId.current) return;
@@ -78,6 +82,15 @@ export function DashboardPage() {
 
   // Poll full job data only while the job is still processing
   const processingIds = jobs.filter(isProcessing).map((j) => j.id);
+
+  // Refresh credits once when a new job starts so the deduction is reflected immediately
+  useEffect(() => {
+    if (processingIds.length === 0) return;
+    getCredits()
+      .then((data) => setCreditsRemaining(data.creditsRemaining))
+      .catch(() => {});
+  }, [processingIds.length > 0]);
+
   useEffect(() => {
     if (processingIds.length === 0) return;
     const interval = setInterval(async () => {
@@ -150,7 +163,9 @@ export function DashboardPage() {
     } catch {}
   }
 
-  const isRunning = submitting || jobs.some((j) => !TERMINAL.has(j.status));
+  const processingJobs = jobs.filter((j) => !TERMINAL.has(j.status));
+  const doneJobs = jobs.filter((j) => TERMINAL.has(j.status));
+  const isRunning = uploading || processing || jobs.some((j) => !TERMINAL.has(j.status));
 
   return (
     <div className="min-h-screen bg-surface text-white antialiased">
@@ -219,10 +234,16 @@ export function DashboardPage() {
 
           <div className="w-full">
             <UrlForm
-              onFileSubmit={submit}
-              disabled={isRunning}
-              uploadProgress={uploadProgress}
+              onFileSelect={startUpload}
+              onGenerateClips={generateClips}
               onCancelUpload={abortUpload ?? undefined}
+              onCancelPending={cancelPendingUpload}
+              uploadProgress={uploadProgress}
+              uploadDone={uploadDone}
+              pendingThumbnailUrl={pendingThumbnailUrl ?? undefined}
+              processing={processing}
+              creditsNeeded={creditsNeeded ?? undefined}
+              disabled={isRunning && !uploadDone}
             />
             {error && (
               <p className="text-red-400 text-xs mt-2 text-left">{error}</p>
@@ -242,9 +263,20 @@ export function DashboardPage() {
           </div>
         )}
 
-        {!loadingJobs && jobs.length > 0 && (
+        {!loadingJobs && processingJobs.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <h2 className="text-sm font-semibold text-zinc-400">Processing</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {processingJobs.map((job) => (
+                <ProcessingJobCard key={job.id} job={job} onCancel={handleCancel} localThumbnailUrl={localThumbnails.get(job.id)} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {!loadingJobs && doneJobs.length > 0 && (
           <div className="flex flex-col gap-12">
-            {jobs.map((job) => (
+            {doneJobs.map((job) => (
               <JobSection key={job.id} job={job} onJobUpdate={updateJob} onCancel={handleCancel} />
             ))}
           </div>

@@ -28,4 +28,6 @@ export interface Job {
   error?: string;
   createdAt: string;
   updatedAt: string;
+  creditsDeducted?: number;
+  sourceThumbnailUrl?: string;
 }
