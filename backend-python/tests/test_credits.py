@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from services.credits import refund_job_credits
 
 
@@ -28,14 +28,14 @@ def test_refund_returns_amount_and_zeros_job():
     result = refund_job_credits(supabase, "job-1", "user-1")
 
     assert result == 5
+    supabase.rpc.assert_called_once_with("refund_credits", {"p_user_id": "user-1", "p_amount": 5})
     jobs_table.update.assert_called_with({"credits_deducted": 0})
 
 
 def test_refund_idempotent_when_already_zero():
     supabase, _, _ = _make_supabase(credits_deducted=0)
 
-    with patch("services.credits.add_credits") as mock_add:
-        result = refund_job_credits(supabase, "job-1", "user-1")
+    result = refund_job_credits(supabase, "job-1", "user-1")
 
     assert result == 0
-    mock_add.assert_not_called()
+    supabase.rpc.assert_not_called()

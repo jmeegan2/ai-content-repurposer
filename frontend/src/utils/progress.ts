@@ -15,6 +15,7 @@ export function statusToPercent(status: JobStatus): number {
   return STATUS_PERCENT[status] ?? 5;
 }
 
+// later on can use historical averages
 export function calcEta(creditsDeducted: number, percent: number): string {
   const totalMin = 2 + creditsDeducted * 0.4;
   const remainMin = totalMin * (1 - percent / 100);
