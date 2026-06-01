@@ -8,6 +8,20 @@ on:
   workflow_dispatch:
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend-python/**'
+
   python:
     name: Python Tests
     runs-on: ubuntu-latest
@@ -79,7 +93,8 @@ jobs:
   smoke-test-modal:
     name: Smoke Test Modal
     runs-on: ubuntu-latest
-    needs: [python]
+    needs: [python, changes]
+    if: needs.changes.outputs.backend == 'true'
     env:
       MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
       MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
@@ -101,8 +116,8 @@ jobs:
   deploy-modal:
     name: Deploy Modal
     runs-on: ubuntu-latest
-    needs: [smoke-test-modal]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [smoke-test-modal, changes]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.changes.outputs.backend == 'true'
     env:
       MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
       MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
