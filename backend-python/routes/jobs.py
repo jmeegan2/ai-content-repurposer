@@ -1,6 +1,9 @@
 import logging
 import math
+import os
 import re
+import tempfile
+import threading
 
 logger = logging.getLogger(__name__)
 import uuid
@@ -14,7 +17,48 @@ from middleware.auth import require_auth
 from services.supabase_client import supabase
 from services.s3 import get_presigned_url, generate_presigned_upload_url
 from services.credits import deduct_credits, refund_job_credits, check_credits
+
 import modal
+
+_LOCAL_PIPELINE = os.environ.get("LOCAL_PIPELINE", "").lower() in ("1", "true", "yes")
+
+
+def _run_pipeline_locally(job_id: str, s3_key: str, user_id: str) -> None:
+    import boto3
+    from services.db import update_job as _update_job
+    from services.credits import refund_job_credits as _refund
+    from services.pipeline import run_pipeline_from_file
+
+    update_job = lambda jid, patch: _update_job(supabase, jid, patch)
+
+    def refund_credits() -> None:
+        _refund(supabase, job_id, user_id)
+
+    update_job(job_id, {"status": "downloading"})
+    temp_dir = tempfile.mkdtemp(prefix="repurposer-")
+    file_name = os.path.basename(s3_key)
+    file_path = os.path.join(temp_dir, file_name)
+
+    try:
+        boto3.client(
+            "s3",
+            region_name=os.environ.get("AWS_REGION", "us-east-1"),
+            aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+            aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+        ).download_file(os.environ["AWS_S3_BUCKET"], s3_key, file_path)
+    except Exception as exc:
+        logger.error(f"[{job_id}] local S3 download failed — {exc}")
+        update_job(job_id, {"status": "failed", "error": f"S3 download failed: {exc}"})
+        refund_credits()
+        return
+
+    run_pipeline_from_file(job_id, file_path, temp_dir, update_job, raw_s3_key=s3_key, refund_credits_fn=refund_credits)
+
+
+def _spawn_local_pipeline(job_id: str, s3_key: str, user_id: str) -> None:
+    t = threading.Thread(target=_run_pipeline_locally, args=(job_id, s3_key, user_id), daemon=True)
+    t.start()
+
 
 router = APIRouter()
 
@@ -141,12 +185,16 @@ def complete_upload(
     supabase.table("jobs").update({"credits_deducted": credits_needed}).eq("id", body.job_id).execute()
 
     try:
-        modal_fn = modal.Function.from_name("ai-repurposer", "run_pipeline_from_s3_modal")
-        call = modal_fn.spawn(body.job_id, body.s3_key, user_id)
-        supabase.table("jobs").update({"modal_call_id": call.object_id}).eq("id", body.job_id).execute()
-        logger.info(f"[{body.job_id}] spawned on Modal (call={call.object_id}), credits_used={credits_needed}")
+        if _LOCAL_PIPELINE:
+            _spawn_local_pipeline(body.job_id, body.s3_key, user_id)
+            logger.info(f"[{body.job_id}] spawned locally, credits_used={credits_needed}")
+        else:
+            modal_fn = modal.Function.from_name("ai-repurposer", "run_pipeline_from_s3_modal")
+            call = modal_fn.spawn(body.job_id, body.s3_key, user_id)
+            supabase.table("jobs").update({"modal_call_id": call.object_id}).eq("id", body.job_id).execute()
+            logger.info(f"[{body.job_id}] spawned on Modal (call={call.object_id}), credits_used={credits_needed}")
     except Exception as e:
-        logger.error(f"[{body.job_id}] Modal spawn failed — {e}")
+        logger.error(f"[{body.job_id}] pipeline spawn failed — {e}")
         refund_job_credits(supabase, body.job_id, user_id)
         supabase.table("jobs").update({"status": "failed", "error": str(e)}).eq("id", body.job_id).execute()
         raise HTTPException(status_code=500, detail=f"Failed to start pipeline: {e}")
@@ -168,7 +216,7 @@ def cancel_job(job_id: str, user_id: str = Depends(require_auth)):
         raise HTTPException(status_code=404, detail="Job not found")
 
     call_id = job_resp.data.get("modal_call_id")
-    if call_id:
+    if call_id and not _LOCAL_PIPELINE:
         try:
             modal.FunctionCall.from_id(call_id).cancel()
             logger.info(f"[{job_id}] Modal call {call_id} cancelled")
