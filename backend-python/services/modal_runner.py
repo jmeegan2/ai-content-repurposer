@@ -18,7 +18,6 @@ image = (
         "/Users/jamesmeegan/Desktop/Business /AI Content Repurposer/ai content repurposer code/backend-python",
         remote_path="/app",
     )
-    .add_local_file("/Users/jamesmeegan/Downloads/cookies.txt", "/app/cookies.txt")
 )
 
 app = modal.App("ai-repurposer", image=image)
