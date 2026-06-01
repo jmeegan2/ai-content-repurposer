@@ -2,7 +2,9 @@ import os
 from models import Clip, WordTimestamp
 from services import autoframe
 from services.ffmpeg import FFMPEG, run_ffmpeg
+
 _WORDS_PER_CAPTION = 4
+_FONTS_DIR = os.path.join(os.path.dirname(__file__), "..", "fonts")
 
 
 def _pad(n: float, digits: int = 2) -> str:
@@ -52,12 +54,13 @@ def process_clip(
 
     # Pass 2: burn subtitles onto tracked video
     # Commas inside force_style must be escaped with \, so ffmpeg doesn't treat them as filter separators
-    subtitle_style = r"FontName=Futura\,FontSize=14\,Bold=1\,PrimaryColour=&H00FFFFFF\,OutlineColour=&H00000000\,Outline=1\,Shadow=0\,BorderStyle=1\,Alignment=2\,MarginV=45"
+    subtitle_style = r"FontName=Montserrat\,FontSize=14\,Bold=1\,PrimaryColour=&H00FFFFFF\,OutlineColour=&H00000000\,Outline=1\,Shadow=0\,BorderStyle=1\,Alignment=2\,MarginV=45"
+    fonts_dir = os.path.abspath(_FONTS_DIR)
     run_ffmpeg(
         [
             FFMPEG, "-y",
             "-i", tracked_path,
-            "-vf", f"subtitles={srt_path}:force_style={subtitle_style}",
+            "-vf", f"subtitles={srt_path}:fontsdir={fonts_dir}:force_style={subtitle_style}",
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",

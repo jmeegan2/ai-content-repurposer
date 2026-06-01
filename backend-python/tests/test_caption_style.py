@@ -59,12 +59,14 @@ def test_caption_style():
         with open(srt_path, "w", encoding="utf-8") as f:
             f.write(_build_srt(words, 0.0))
 
-        subtitle_style = r"FontName=Futura\,FontSize=14\,Bold=1\,PrimaryColour=&H00FFFFFF\,OutlineColour=&H00000000\,Outline=1\,Shadow=0\,BorderStyle=1\,Alignment=2\,MarginV=45"
+        from services.clipper import _FONTS_DIR
+        subtitle_style = r"FontName=Montserrat\,FontSize=14\,Bold=1\,PrimaryColour=&H00FFFFFF\,OutlineColour=&H00000000\,Outline=1\,Shadow=0\,BorderStyle=1\,Alignment=2\,MarginV=45"
+        fonts_dir = os.path.abspath(_FONTS_DIR)
         run_ffmpeg(
             [
                 FFMPEG, "-y",
                 "-i", blank_path,
-                "-vf", f"subtitles={srt_path}:force_style={subtitle_style}",
+                "-vf", f"subtitles={srt_path}:fontsdir={fonts_dir}:force_style={subtitle_style}",
                 "-c:v", "libx264", "-preset", "fast", "-crf", "23",
                 "-movflags", "+faststart",
                 _OUTPUT,
