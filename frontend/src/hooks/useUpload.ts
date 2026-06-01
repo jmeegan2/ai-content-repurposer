@@ -136,6 +136,7 @@ export function useUpload(onJobCreated: (job: Job) => void) {
     abortUpload,
     uploadDone: pendingJob !== null,
     pendingThumbnailUrl: pendingJob?.localThumbUrl ?? null,
+    creditsNeeded: pendingJob ? Math.ceil(pendingJob.durationSeconds / 60) : null,
     error,
     clearError: () => setError(null),
     localThumbnails,

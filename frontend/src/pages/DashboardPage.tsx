@@ -45,7 +45,7 @@ export function DashboardPage() {
   const {
     startUpload, generateClips, cancelPendingUpload,
     uploading, processing, uploadProgress, abortUpload,
-    uploadDone, pendingThumbnailUrl,
+    uploadDone, pendingThumbnailUrl, creditsNeeded,
     error, localThumbnails,
   } = useUpload((job) => setJobs((prev) => [job, ...prev]));
 
@@ -82,6 +82,15 @@ export function DashboardPage() {
 
   // Poll full job data only while the job is still processing
   const processingIds = jobs.filter(isProcessing).map((j) => j.id);
+
+  // Refresh credits once when a new job starts so the deduction is reflected immediately
+  useEffect(() => {
+    if (processingIds.length === 0) return;
+    getCredits()
+      .then((data) => setCreditsRemaining(data.creditsRemaining))
+      .catch(() => {});
+  }, [processingIds.length > 0]);
+
   useEffect(() => {
     if (processingIds.length === 0) return;
     const interval = setInterval(async () => {
@@ -233,6 +242,7 @@ export function DashboardPage() {
               uploadDone={uploadDone}
               pendingThumbnailUrl={pendingThumbnailUrl ?? undefined}
               processing={processing}
+              creditsNeeded={creditsNeeded ?? undefined}
               disabled={isRunning && !uploadDone}
             />
             {error && (

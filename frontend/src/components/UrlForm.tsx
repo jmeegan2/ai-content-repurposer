@@ -9,6 +9,7 @@ interface Props {
   uploadDone?: boolean;
   pendingThumbnailUrl?: string;
   processing?: boolean;
+  creditsNeeded?: number;
   disabled: boolean;
 }
 
@@ -21,6 +22,7 @@ export function UrlForm({
   uploadDone,
   pendingThumbnailUrl,
   processing,
+  creditsNeeded,
   disabled,
 }: Props) {
   const [dragging, setDragging] = useState(false);
@@ -85,6 +87,9 @@ export function UrlForm({
             )}
             {processing ? "Starting…" : "Generate Clips"}
           </button>
+          <p className="text-center text-xs text-zinc-500 mt-2">
+            {creditsNeeded != null ? <><span className="text-zinc-300 font-medium">{creditsNeeded} credit{creditsNeeded !== 1 ? "s" : ""}</span> will be used</> : "1 credit = 1 minute of video"}
+          </p>
         </div>
       </div>
     );

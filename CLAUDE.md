@@ -116,6 +116,8 @@ All API routes use `middleware/auth.py:require_auth` as a FastAPI dependency. It
 - `add_credits` — used for refunds and top-ups
 - `reset_monthly_credits` — resets to 150 on subscription renewal
 
+**Credit rate: 1 credit = 1 minute of video** (rounded up via `math.ceil`)
+
 ### Stripe
 
 Two routers in `routes/stripe.py`:
