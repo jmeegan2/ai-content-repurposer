@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 interface Props {
   onFileSelect: (file: File) => void;
@@ -39,7 +40,10 @@ export function UrlForm({
   }, [isUploading]);
 
   function handleFile(file: File) {
-    if (!file.name.toLowerCase().endsWith(".mp4")) return;
+    if (!file.name.toLowerCase().endsWith(".mp4")) {
+      toast.error("Only MP4 files are supported");
+      return;
+    }
     onFileSelect(file);
   }
 

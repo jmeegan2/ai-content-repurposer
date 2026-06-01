@@ -1,4 +1,7 @@
 import modal
+from pathlib import Path
+
+_BACKEND_DIR = Path(__file__).parent.parent
 
 image = (
     modal.Image.debian_slim()
@@ -14,11 +17,7 @@ image = (
         "python-dotenv",
         "httpx",
     )
-    .add_local_dir(
-        "/Users/jamesmeegan/Desktop/Business /AI Content Repurposer/ai content repurposer code/backend-python",
-        remote_path="/app",
-    )
-    .add_local_file("/Users/jamesmeegan/Downloads/cookies.txt", "/app/cookies.txt")
+    .add_local_dir(str(_BACKEND_DIR), remote_path="/app")
 )
 
 app = modal.App("ai-repurposer", image=image)
@@ -45,7 +44,8 @@ def _make_refund_credits(job_id: str, user_id: str):
 @app.function(
     cpu=4,
     timeout=2700,
-    retries=modal.Retries(max_retries=2, backoff_coefficient=2.0),
+    # No retries: pipeline deletes the raw S3 file and refunds credits in its finally block,
+    # so a retry would fail on S3 download and corrupt the job error/credit state.
     secrets=[modal.Secret.from_name("ai-repurposer-secrets")],
 )
 def run_pipeline_from_s3_modal(job_id: str, s3_key: str, user_id: str):
@@ -85,3 +85,19 @@ def run_pipeline_from_s3_modal(job_id: str, s3_key: str, user_id: str):
         return
 
     run_pipeline_from_file(job_id, file_path, temp_dir, update_job, raw_s3_key=s3_key, refund_credits_fn=refund_credits)
+
+
+@app.function(timeout=60, secrets=[modal.Secret.from_name("ai-repurposer-secrets")])
+def smoke_test():
+    import sys
+    sys.path.insert(0, "/app")
+    from services.pipeline import run_pipeline_from_file
+    from services.transcriber import transcribe_video
+    from services.clip_detector import detect_clips
+    from services.autoframe import process_clip
+    print("smoke test passed — all imports OK")
+
+
+@app.local_entrypoint()
+def main():
+    smoke_test.remote()

@@ -30,6 +30,7 @@ def deduct_credits(supabase, user_id: str, amount: int) -> None:
 
 
 def add_credits(supabase, user_id: str, amount: int) -> None:
+    # possible race condition and unnecessary read 
     profile = get_profile(supabase, user_id)
     supabase.table("profiles").update({
         "credits_remaining": profile["credits_remaining"] + amount,
