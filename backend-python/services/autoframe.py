@@ -56,7 +56,6 @@ def process_clip(input_path: str, start_time: float, end_time: float, output_pat
     tmp_silent = tempfile.mktemp(suffix="_silent.mp4")
     try:
         _render_frames(cap, start_frame, total_frames, per_frame_crop_x, crop_width, tmp_silent, fps)
-        cap.release()
         _mux_audio(input_path, start_time, duration, tmp_silent, output_path)
     finally:
         cap.release()

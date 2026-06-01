@@ -45,7 +45,8 @@ def _make_refund_credits(job_id: str, user_id: str):
 @app.function(
     cpu=4,
     timeout=2700,
-    retries=modal.Retries(max_retries=2, backoff_coefficient=2.0),
+    # No retries: pipeline deletes the raw S3 file and refunds credits in its finally block,
+    # so a retry would fail on S3 download and corrupt the job error/credit state.
     secrets=[modal.Secret.from_name("ai-repurposer-secrets")],
 )
 def run_pipeline_from_s3_modal(job_id: str, s3_key: str, user_id: str):

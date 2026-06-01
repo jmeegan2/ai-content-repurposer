@@ -76,6 +76,29 @@ jobs:
           name: frontend-coverage
           path: frontend/coverage/lcov.info
 
+  deploy-modal:
+    name: Deploy Modal
+    runs-on: ubuntu-latest
+    needs: [python]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Modal
+        run: pip install modal
+
+      - name: Deploy Modal worker
+        run: modal deploy backend-python/services/modal_runner.py
+
   sonar:
     name: SonarCloud
     runs-on: ubuntu-latest
