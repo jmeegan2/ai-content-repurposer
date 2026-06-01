@@ -86,3 +86,19 @@ def run_pipeline_from_s3_modal(job_id: str, s3_key: str, user_id: str):
         return
 
     run_pipeline_from_file(job_id, file_path, temp_dir, update_job, raw_s3_key=s3_key, refund_credits_fn=refund_credits)
+
+
+@app.function(timeout=60)
+def smoke_test():
+    import sys
+    sys.path.insert(0, "/app")
+    from services.pipeline import run_pipeline_from_file
+    from services.transcriber import transcribe_video
+    from services.clip_detector import detect_clips
+    from services.autoframe import process_clip
+    print("smoke test passed — all imports OK")
+
+
+@app.local_entrypoint()
+def main():
+    smoke_test.remote()

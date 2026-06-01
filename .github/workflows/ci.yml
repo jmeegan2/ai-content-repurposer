@@ -96,6 +96,9 @@ jobs:
       - name: Install Modal
         run: pip install modal
 
+      - name: Smoke test Modal container
+        run: modal run backend-python/services/modal_runner.py
+
       - name: Deploy Modal worker
         run: modal deploy backend-python/services/modal_runner.py
 
