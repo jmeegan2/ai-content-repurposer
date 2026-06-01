@@ -1,4 +1,7 @@
 import modal
+from pathlib import Path
+
+_BACKEND_DIR = Path(__file__).parent.parent
 
 image = (
     modal.Image.debian_slim()
@@ -14,10 +17,7 @@ image = (
         "python-dotenv",
         "httpx",
     )
-    .add_local_dir(
-        "/Users/jamesmeegan/Desktop/Business /AI Content Repurposer/ai content repurposer code/backend-python",
-        remote_path="/app",
-    )
+    .add_local_dir(str(_BACKEND_DIR), remote_path="/app")
 )
 
 app = modal.App("ai-repurposer", image=image)
