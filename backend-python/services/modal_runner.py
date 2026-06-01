@@ -87,7 +87,7 @@ def run_pipeline_from_s3_modal(job_id: str, s3_key: str, user_id: str):
     run_pipeline_from_file(job_id, file_path, temp_dir, update_job, raw_s3_key=s3_key, refund_credits_fn=refund_credits)
 
 
-@app.function(timeout=60)
+@app.function(timeout=60, secrets=[modal.Secret.from_name("ai-repurposer-secrets")])
 def smoke_test():
     import sys
     sys.path.insert(0, "/app")
