@@ -77,23 +77,24 @@ export function LandingPage() {
               : "bg-transparent"
           }`}
         >
-          <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-2 text-lg font-bold tracking-tight select-none">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2">
+            <Link to="/" className="flex items-center gap-2 text-lg font-bold tracking-tight select-none shrink-0">
               <img src="/favicon.svg" className="h-7 w-7" alt="" />
               HorizonClips
             </Link>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
               <Link
                 to="/login"
-                className="text-zinc-400 hover:text-white text-sm px-4 py-2 transition-colors rounded-lg hover:bg-zinc-800/50"
+                className="text-zinc-400 hover:text-white text-sm px-3 sm:px-4 py-2 transition-colors rounded-lg hover:bg-zinc-800/50 whitespace-nowrap"
               >
                 Sign in
               </Link>
               <Link
                 to="/signup"
-                className="bg-white hover:bg-zinc-100 text-black text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                className="bg-white hover:bg-zinc-100 text-black text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
               >
-                Get Started Free
+                <span className="hidden sm:inline">Get Started Free</span>
+                <span className="sm:hidden">Get Started</span>
               </Link>
             </div>
           </div>

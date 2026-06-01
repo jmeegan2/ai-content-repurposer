@@ -14,9 +14,18 @@ async function authHeaders(): Promise<HeadersInit> {
   };
 }
 
+async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, init);
+  if (res.status === 401) {
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
+  return res;
+}
+
 export async function getJob(id: string): Promise<Job> {
   if (!UUID_RE.test(id)) throw new Error("Invalid job ID");
-  const res = await fetch(`${BASE}/jobs/${id}`, {
+  const res = await apiFetch(`${BASE}/jobs/${id}`, {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch job");
@@ -24,7 +33,7 @@ export async function getJob(id: string): Promise<Job> {
 }
 
 export async function getJobs(): Promise<Job[]> {
-  const res = await fetch(`${BASE}/jobs/`, {
+  const res = await apiFetch(`${BASE}/jobs/`, {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch jobs");
@@ -35,7 +44,7 @@ export async function requestUploadUrl(
   filename: string,
   durationSeconds: number,
 ): Promise<{ job_id: string; upload_url: string; s3_key: string; thumbnail_upload_url: string }> {
-  const res = await fetch(`${BASE}/jobs/upload-url`, {
+  const res = await apiFetch(`${BASE}/jobs/upload-url`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ filename, duration_seconds: durationSeconds }),
@@ -71,7 +80,7 @@ export function uploadToS3(
 }
 
 export async function completeUpload(jobId: string, s3Key: string, durationSeconds: number): Promise<Job> {
-  const res = await fetch(`${BASE}/jobs/upload-complete`, {
+  const res = await apiFetch(`${BASE}/jobs/upload-complete`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ job_id: jobId, s3_key: s3Key, duration_seconds: durationSeconds }),
@@ -84,7 +93,7 @@ export async function completeUpload(jobId: string, s3Key: string, durationSecon
 }
 
 export async function createCheckoutSession(email: string): Promise<string> {
-  const res = await fetch(`${BASE}/stripe/create-checkout-session`, {
+  const res = await apiFetch(`${BASE}/stripe/create-checkout-session`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ email }),
@@ -95,7 +104,7 @@ export async function createCheckoutSession(email: string): Promise<string> {
 }
 
 export async function getCredits(): Promise<{ creditsRemaining: number; creditsUsed: number; subscriptionStatus: string }> {
-  const res = await fetch(`${BASE}/stripe/credits`, {
+  const res = await apiFetch(`${BASE}/stripe/credits`, {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch credits");
@@ -108,7 +117,7 @@ export async function getCredits(): Promise<{ creditsRemaining: number; creditsU
 }
 
 export async function createTopupSession(email: string): Promise<string> {
-  const res = await fetch(`${BASE}/stripe/create-topup-session`, {
+  const res = await apiFetch(`${BASE}/stripe/create-topup-session`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ email }),
@@ -119,7 +128,7 @@ export async function createTopupSession(email: string): Promise<string> {
 }
 
 export async function createPortalSession(): Promise<string> {
-  const res = await fetch(`${BASE}/stripe/create-portal-session`, {
+  const res = await apiFetch(`${BASE}/stripe/create-portal-session`, {
     method: "POST",
     headers: await authHeaders(),
   });
@@ -130,7 +139,7 @@ export async function createPortalSession(): Promise<string> {
 
 export async function cancelJob(id: string): Promise<void> {
   if (!UUID_RE.test(id)) throw new Error("Invalid job ID");
-  const res = await fetch(`${BASE}/jobs/${id}`, {
+  const res = await apiFetch(`${BASE}/jobs/${id}`, {
     method: "DELETE",
     headers: await authHeaders(),
   });
@@ -141,7 +150,7 @@ export async function cancelJob(id: string): Promise<void> {
 }
 
 export async function getYoutubeStatus(): Promise<{ connected: boolean }> {
-  const res = await fetch(`${BASE}/auth/youtube/status`, {
+  const res = await apiFetch(`${BASE}/auth/youtube/status`, {
     headers: await authHeaders(),
   });
   if (!res.ok) return { connected: false };
@@ -149,7 +158,7 @@ export async function getYoutubeStatus(): Promise<{ connected: boolean }> {
 }
 
 export async function getYoutubeAuthUrl(): Promise<string> {
-  const res = await fetch(`${BASE}/auth/youtube/url`, {
+  const res = await apiFetch(`${BASE}/auth/youtube/url`, {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to get YouTube auth URL");
@@ -160,7 +169,7 @@ export async function getYoutubeAuthUrl(): Promise<string> {
 export async function getClipYoutubeStatus(
   clipId: string,
 ): Promise<{ youtubeUploadStatus: "pending" | "uploaded" | "failed" | null; youtubeVideoId: string | null }> {
-  const res = await fetch(`${BASE}/clips/${clipId}/youtube-status`, {
+  const res = await apiFetch(`${BASE}/clips/${clipId}/youtube-status`, {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error("Failed to get clip YouTube status");
@@ -172,7 +181,7 @@ export async function uploadClipToYoutube(
   title: string,
   description = "",
 ): Promise<void> {
-  const res = await fetch(`${BASE}/clips/${clipId}/upload-youtube`, {
+  const res = await apiFetch(`${BASE}/clips/${clipId}/upload-youtube`, {
     method: "POST",
     headers: await authHeaders(),
     body: JSON.stringify({ title, description }),

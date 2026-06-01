@@ -8,7 +8,10 @@ async def require_auth(authorization: str = Header(...)) -> str:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     token = authorization.split("Bearer ")[1]
-    response = supabase.auth.get_user(token)
+    try:
+        response = supabase.auth.get_user(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
     if not response.user:
         raise HTTPException(status_code=401, detail="Unauthorized")
