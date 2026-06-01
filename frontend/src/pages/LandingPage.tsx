@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { HeroAnimation } from "../components/HeroAnimation";
 
 
 const STEPS = [
@@ -197,9 +198,14 @@ export function LandingPage() {
             </div>
           </div>
 
-          <p className="cc-fu cc-fu-4 text-zinc-600 text-xs mb-6 select-none">
+          <p className="cc-fu cc-fu-4 text-zinc-600 text-xs mb-10 select-none">
             Free to start · No credit card required
           </p>
+
+          {/* Demo animation */}
+          <div className="cc-fu cc-fu-5 w-full max-w-lg mb-4">
+            <HeroAnimation />
+          </div>
 
         </section>
 
