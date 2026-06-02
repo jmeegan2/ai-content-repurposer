@@ -127,6 +127,7 @@ export function LandingPage() {
             </span>
           </div>
 
+
           {/* H1 */}
           <h1 className="cc-fu cc-fu-2 font-bold tracking-tight leading-[1.05] mb-5 max-w-3xl text-5xl sm:text-6xl md:text-7xl">
             <span
