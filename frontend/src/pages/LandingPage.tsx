@@ -4,9 +4,9 @@ import { HeroAnimation } from "../components/HeroAnimation";
 
 
 const STEPS = [
-  { n: "01", title: "Upload", desc: "Drag & drop any MP4 directly into the app." },
-  { n: "02", title: "AI processes", desc: "Face tracking + word-level captions generated automatically." },
-  { n: "03", title: "Download", desc: "9:16 clips ready to post — no editing required." },
+  { n: "01", title: "Upload your episode", desc: "Drop any podcast recording MP4 directly into the app." },
+  { n: "02", title: "AI finds the moments", desc: "HorizonClips scans your episode for the most shareable clips and adds word-level captions automatically." },
+  { n: "03", title: "Post to YouTube Shorts", desc: "9:16 clips post directly to your YouTube channel — no editing required." },
 ];
 
 const FEATURES = [
@@ -19,7 +19,7 @@ const FEATURES = [
       </svg>
     ),
     title: "Face-tracked framing",
-    desc: "MediaPipe keeps the subject centered in every cut. No manual cropping, ever.",
+    desc: "Your host and guests stay centered in every cut. No manual cropping, ever.",
   },
   {
     icon: (
@@ -29,7 +29,7 @@ const FEATURES = [
       </svg>
     ),
     title: "Burned-in captions",
-    desc: "Word-level subtitles, frame-perfect sync, styled and ready to post.",
+    desc: "Word-level captions, perfectly synced and burned in automatically.",
   },
   {
     icon: (
@@ -38,8 +38,8 @@ const FEATURES = [
         <circle cx="11" cy="17" r="1" fill="#6723ff"/>
       </svg>
     ),
-    title: "9:16 ready",
-    desc: "Every clip is vertical-native. Drop it straight into YouTube Shorts.",
+    title: "Posts to YouTube Shorts",
+    desc: "Clips upload directly to your YouTube channel. One click, done.",
   },
 ];
 
@@ -123,7 +123,7 @@ export function LandingPage() {
           >
             <span className="w-1.5 h-1.5 rounded-full bg-brand" />
             <span className="text-brand text-xs font-semibold uppercase tracking-widest">
-              #1 AI Video Clipping Tool
+              Built for Podcasters
             </span>
           </div>
 
@@ -136,7 +136,7 @@ export function LandingPage() {
                 WebkitTextFillColor: "transparent",
               }}
             >
-              1 video. Up to 5 viral clips.
+              Podcasts into Shorts, automatically
             </span>
             <br />
             <span className="text-zinc-500">No editing required.</span>
@@ -144,7 +144,7 @@ export function LandingPage() {
 
           {/* Subtext */}
           <p className="cc-fu cc-fu-3 text-zinc-400 text-lg max-w-md mb-10 leading-relaxed">
-            Upload an MP4. Get face-tracked 9:16 clips with burned-in captions, ready for YouTube Shorts.
+            Upload your podcast recording. HorizonClips finds the best moments, crops them vertical, burns in captions, and posts directly to YouTube Shorts.
           </p>
 
           {/* Fake upload widget */}
@@ -247,7 +247,7 @@ export function LandingPage() {
               <p className="text-zinc-600 text-xs uppercase tracking-widest font-semibold mb-3">
                 Features
               </p>
-              <h2 className="text-3xl sm:text-4xl font-bold">Built for creators who ship.</h2>
+              <h2 className="text-3xl sm:text-4xl font-bold">Built for podcasters who want to grow.</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               {FEATURES.map(({ icon, title, desc }) => (
@@ -369,9 +369,9 @@ export function LandingPage() {
               WebkitTextFillColor: "transparent",
             }}
           >
-            Ready to go viral?
+            Grow your podcast on YouTube Shorts.
           </h2>
-          <p className="text-zinc-500 text-base mb-8">Start clipping in seconds.</p>
+          <p className="text-zinc-500 text-base mb-8">Upload your first episode and see what clips in seconds.</p>
           <Link
             to="/signup"
             className="inline-flex items-center gap-2.5 bg-white hover:bg-zinc-100 text-black font-semibold px-8 py-4 rounded-xl text-sm transition-colors"
