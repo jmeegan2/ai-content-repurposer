@@ -145,15 +145,6 @@ export function HeroAnimation() {
               />
 
 
-              {/* Caption */}
-              <div className="ha-caption" style={{
-                position: "absolute", bottom: 10, left: 4, right: 4,
-                color: "#fff",
-                textAlign: "center", lineHeight: 1.4, fontWeight: 700,
-                textShadow: "0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.7)",
-              }}>
-                {clip.caption}
-              </div>
 
 
             </div>
